@@ -10,14 +10,10 @@ import { useAuth } from "@/lib/AuthContext";
 import { useTrading } from "@/lib/TradingContext";
 import { usePreferences } from "@/lib/PreferencesContext";
 import OrderConfirmModal from "@/components/OrderConfirmModal";
-import { getIntradayPositions, type IntradayPosition } from "@/lib/api";
-import {
-  holdings,
-  investments,
-  stockDirectory,
-} from "@/lib/mockData";
+import { getIntradayPositions, getPortfolio, type IntradayPosition, type PortfolioHolding } from "@/lib/api";
+import { stockDirectory } from "@/lib/mockData";
 
-type SortKey = "ticker" | "currentPrice" | "dayChangePercent" | "returnsPercent" | "currentValue";
+type SortKey = "ticker" | "currentPrice" | "returnsPercent" | "currentValue";
 type SortDir = "asc" | "desc";
 
 export default function HoldingsPage() {
@@ -40,32 +36,66 @@ export default function HoldingsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [intradayPositions, setIntradayPositions] = useState<IntradayPosition[]>([]);
   const [loadingIntraday, setLoadingIntraday] = useState(true);
+  const [portfolio, setPortfolio] = useState<PortfolioHolding[]>([]);
+  const [apiBalance, setApiBalance] = useState<number | null>(null);
 
-  // Fetch intraday positions
   useEffect(() => {
-    async function fetchIntraday() {
-      const res = await getIntradayPositions();
-      if (res.data) {
-        setIntradayPositions(res.data);
-      }
+    if (!isLoggedIn) return;
+    getIntradayPositions().then(res => {
+      if (res.data) setIntradayPositions(res.data);
       setLoadingIntraday(false);
-    }
-    if (isLoggedIn) {
-      fetchIntraday();
-    }
+    });
+    getPortfolio().then(res => {
+      if (res.data) {
+        setPortfolio(res.data.holdings);
+        setApiBalance(res.data.balance);
+      }
+    });
   }, [isLoggedIn]);
+
+  // Merge real portfolio with mock stock data for the trading panel
+  const holdings = useMemo(() => portfolio.map(h => ({
+    ticker: h.ticker,
+    name: h.name,
+    qty: h.quantity,
+    avgPrice: h.avg_price,
+    currentPrice: h.current_price ?? h.avg_price,
+    currentValue: (h.current_price ?? h.avg_price) * h.quantity,
+    investedValue: h.avg_price * h.quantity,
+    returnsPercent: h.current_price !== null
+      ? ((h.current_price - h.avg_price) / h.avg_price) * 100 : 0,
+    returns: h.pnl ?? 0,
+    dayChangePercent: 0,
+    dayChange: 0,
+    sparkline: [] as number[],
+  })), [portfolio]);
+
+  const investments = useMemo(() => {
+    const currentValue  = holdings.reduce((s, h) => s + h.currentValue,  0);
+    const investedValue = holdings.reduce((s, h) => s + h.investedValue, 0);
+    const totalReturns  = currentValue - investedValue;
+    return {
+      currentValue,
+      investedValue,
+      totalReturns,
+      totalReturnsPercent: investedValue > 0 ? (totalReturns / investedValue) * 100 : 0,
+      dayReturns: 0,
+    };
+  }, [holdings]);
 
   const sorted = useMemo(() => {
     const arr = [...holdings];
     arr.sort((a, b) => {
       let av: string | number, bv: string | number;
-      if (sortKey === "ticker") { av = a.ticker; bv = b.ticker; }
-      else { av = a[sortKey]; bv = b[sortKey]; }
+      if (sortKey === "ticker")       { av = a.ticker; bv = b.ticker; }
+      else if (sortKey === "currentPrice")  { av = a.currentPrice; bv = b.currentPrice; }
+      else if (sortKey === "returnsPercent"){ av = a.returnsPercent; bv = b.returnsPercent; }
+      else                            { av = a.currentValue; bv = b.currentValue; }
       if (typeof av === "string") return sortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
       return sortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
     });
     return arr;
-  }, [sortKey, sortDir]);
+  }, [holdings, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -78,6 +108,7 @@ export default function HoldingsPage() {
       : <ChevronDown size={10} className="inline ml-0.5 opacity-30" />;
   }
 
+  const displayBalance = apiBalance ?? balance;
   const recentTxns = transactions.filter(t => t.type === "BUY" || t.type === "SELL").slice(0, 5);
 
   const selectedStock = selectedTicker ? stockDirectory[selectedTicker] : null;
@@ -221,13 +252,13 @@ export default function HoldingsPage() {
             </button>
             {sortOpen && (
               <div className="absolute top-full left-0 mt-1 z-20 border border-white/15 bg-bg min-w-[140px]">
-                {(["ticker", "currentPrice", "returnsPercent", "currentValue", "dayChangePercent"] as SortKey[]).map((key) => (
+                {(["ticker", "currentPrice", "returnsPercent", "currentValue"] as SortKey[]).map((key) => (
                   <button
                     key={key}
                     onClick={() => { setSortKey(key); setSortDir("desc"); setSortOpen(false); }}
                     className={`block w-full text-left px-4 py-2.5 text-[10px] tracking-[0.1em] transition-colors ${sortKey === key ? "text-white bg-white/[0.06]" : "text-white/50 hover:text-white hover:bg-white/[0.03]"}`}
                   >
-                    {{ ticker: "NAME", currentPrice: "PRICE", returnsPercent: "RETURNS", currentValue: "VALUE", dayChangePercent: "1D CHANGE" }[key]}
+                    {{ ticker: "NAME", currentPrice: "PRICE", returnsPercent: "RETURNS", currentValue: "VALUE" }[key]}
                   </button>
                 ))}
               </div>
@@ -511,7 +542,7 @@ export default function HoldingsPage() {
               {/* Balance */}
               <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/8">
                 <p className="text-[9px] tracking-[0.15em] text-white/30">BALANCE</p>
-                <p className="text-[11px] text-white/50">{"\u20B9"}{balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                <p className="text-[11px] text-white/50">{"\u20B9"}{displayBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
               </div>
 
               {/* Action button */}

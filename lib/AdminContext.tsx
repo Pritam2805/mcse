@@ -126,19 +126,18 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleMarket = useCallback(async () => {
-    // Optimistic update
+    const currentPhase = marketStatus?.phase ?? "IDLE";
+    // Optimistic: flip the open indicator
     setMarketOpen((p) => !p);
 
-    const newState = !marketOpen;
-    const res = await toggleMarketStatus(newState);
+    const res = await toggleMarketStatus(currentPhase);
     if (res.error) {
-      // Revert on error
-      setMarketOpen(marketOpen);
-    } else if (res.data) {
-      setMarketStatus(res.data);
-      setMarketOpen(res.data.isOpen);
+      setMarketOpen(marketOpen); // revert
+    } else {
+      // Refresh real state from server after the lifecycle change
+      await refreshMarketStatus();
     }
-  }, [marketOpen]);
+  }, [marketOpen, marketStatus, refreshMarketStatus]);
 
   const toggleListing = useCallback((ticker: string) => {
     setListedStocks((prev) =>

@@ -1,21 +1,35 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
-import { newsItems, formatRelativeTime, allStocksEnriched } from "@/lib/mockData";
+import { getNewsItem, type NewsItem } from "@/lib/api";
 
-export default function NewsArticlePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+function formatTime(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+export default function NewsArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const index = parseInt(id, 10);
-  const news = newsItems[index];
+  const [news, setNews] = useState<NewsItem | null | undefined>(undefined);
+
+  useEffect(() => {
+    getNewsItem(id).then(res => {
+      setNews(res.data ?? null);
+    });
+  }, [id]);
+
+  if (news === undefined) {
+    return (
+      <div className="py-6 max-w-2xl mx-auto">
+        <p className="text-[11px] text-white/25 animate-pulse tracking-[0.1em]">LOADING...</p>
+      </div>
+    );
+  }
 
   if (!news) {
     return (
@@ -28,11 +42,10 @@ export default function NewsArticlePage({
     );
   }
 
-  const stock = allStocksEnriched.find((s) => s.ticker === news.ticker);
+  const sent = news.sentiment;
 
   return (
     <div className="mobile-content-pad max-w-2xl mx-auto py-6">
-      {/* Back */}
       <motion.button
         initial={{ opacity: 0, x: -6 }}
         animate={{ opacity: 1, x: 0 }}
@@ -49,15 +62,18 @@ export default function NewsArticlePage({
         transition={{ duration: 0.3 }}
       >
         {/* Meta */}
-        <div className="flex items-center gap-3 mb-5">
-          <span className="font-[var(--font-anton)] text-[11px] tracking-[0.1em] text-white/50">{news.ticker}</span>
-          {stock && (
-            <span className="text-[8px] tracking-[0.12em] text-white/20 px-1.5 py-0.5 border border-white/8">
-              {stock.sector}
-            </span>
-          )}
-          <span className={`text-[10px] font-medium ${news.dayChangePercent >= 0 ? "text-[#00D26A]" : "text-[#FF5252]"}`}>
-            {news.dayChangePercent >= 0 ? "+" : ""}{news.dayChangePercent.toFixed(2)}%
+        <div className="flex items-center gap-3 flex-wrap mb-5">
+          {news.related_tickers.map(t => (
+            <Link
+              key={t}
+              href={`/stock/${t}`}
+              className="font-[var(--font-anton)] text-[11px] tracking-[0.1em] text-white/50 hover:text-white transition-colors"
+            >
+              {t}
+            </Link>
+          ))}
+          <span className={`text-[10px] font-medium ml-auto ${sent > 0.1 ? "text-[#00D26A]" : sent < -0.1 ? "text-[#FF5252]" : "text-white/30"}`}>
+            {sent > 0.1 ? "BULLISH" : sent < -0.1 ? "BEARISH" : "NEUTRAL"}
           </span>
         </div>
 
@@ -67,12 +83,10 @@ export default function NewsArticlePage({
         </h1>
 
         {/* Byline */}
-        <div className="flex items-center gap-4 mb-8 pb-6 border-b border-white/8">
-          <span className="text-[10px] text-white/40">{news.name}</span>
-          <span className="text-[9px] text-white/20">{formatRelativeTime(news.timestamp)}</span>
-          <span className="text-[10px] text-white/30 ml-auto">
-            {"\u20B9"}{news.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-          </span>
+        <div className="flex items-center gap-4 mb-8 pb-6 border-b border-white/8 flex-wrap">
+          <span className="text-[10px] text-white/40 uppercase tracking-[0.08em]">{news.source.replace(/_/g, " ")}</span>
+          <span className="text-[9px] text-white/20">{formatTime(news.published_at)}</span>
+          <span className="text-[9px] text-white/15 ml-auto">MACRO TICK {news.macro_tick}</span>
         </div>
 
         {/* Body */}
@@ -80,15 +94,20 @@ export default function NewsArticlePage({
           {news.body}
         </div>
 
-        {/* Footer link */}
-        <div className="pt-6 border-t border-white/8">
-          <Link
-            href={`/stock/${news.ticker}`}
-            className="inline-flex items-center gap-2 text-[10px] tracking-[0.15em] text-white/40 hover:text-white border border-white/15 hover:border-white/40 px-4 py-2.5 transition-all duration-200"
-          >
-            VIEW {news.ticker} DETAILS
-          </Link>
-        </div>
+        {/* Footer links to related stocks */}
+        {news.related_tickers.length > 0 && (
+          <div className="pt-6 border-t border-white/8 flex flex-wrap gap-3">
+            {news.related_tickers.map(t => (
+              <Link
+                key={t}
+                href={`/stock/${t}`}
+                className="inline-flex items-center gap-2 text-[10px] tracking-[0.15em] text-white/40 hover:text-white border border-white/15 hover:border-white/40 px-4 py-2.5 transition-all duration-200"
+              >
+                VIEW {t} DETAILS
+              </Link>
+            ))}
+          </div>
+        )}
       </motion.article>
     </div>
   );

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Inter } from "next/font/google";
 import "./globals.css";
+import { ClerkProvider } from "@clerk/nextjs";
 import AppShell from "@/components/AppShell";
 import { AuthProvider } from "@/lib/AuthContext";
 import { TradingProvider } from "@/lib/TradingContext";
@@ -58,17 +59,25 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${anton.variable} ${inter.variable} antialiased`} suppressHydrationWarning>
       <body className="bg-bg text-white overflow-hidden h-dvh" style={{ overflowX: 'clip' }}>
-        <PreferencesProvider>
-          <AuthProvider>
-            <WebSocketProvider>
-              <TradingProvider>
-                <AdminProvider>
-                  <AppShell>{children}</AppShell>
-                </AdminProvider>
-              </TradingProvider>
-            </WebSocketProvider>
-          </AuthProvider>
-        </PreferencesProvider>
+        <ClerkProvider
+          publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+          isSatellite
+          domain={process.env.NEXT_PUBLIC_CLERK_DOMAIN}
+          signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+          signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+        >
+          <PreferencesProvider>
+            <AuthProvider>
+              <WebSocketProvider>
+                <TradingProvider>
+                  <AdminProvider>
+                    <AppShell>{children}</AppShell>
+                  </AdminProvider>
+                </TradingProvider>
+              </WebSocketProvider>
+            </AuthProvider>
+          </PreferencesProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

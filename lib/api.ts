@@ -11,6 +11,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const USE_MOCK = !API_BASE; // Fall back to mock when no API URL configured
 
+// ─── Token Injection ────────────────────────────────────────────────────────────
+// Call registerTokenGetter once on app boot (e.g. in AuthContext) to wire
+// Clerk's getToken() into every API request automatically.
+
+let _tokenGetter: (() => Promise<string | null>) | null = null;
+export function registerTokenGetter(fn: () => Promise<string | null>): void {
+  _tokenGetter = fn;
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {
@@ -21,6 +30,7 @@ export interface ApiResponse<T> {
 
 export interface MarketStatus {
   isOpen: boolean;
+  phase: string;
   dayNumber: number;
   dayTickCounter: number;
   ticksPerDay: number;
@@ -146,12 +156,20 @@ export interface Notification {
 }
 
 export interface PlatformMetrics {
+  // Overview
   totalInvestors: number;
   totalCompanies: number;
   totalTrades: number;
   totalVolume: number;
   marketCap: number;
   activeToday: number;
+  // Phase 15 live system metrics
+  connectedWsUsers: number;
+  orderRatePerMin: number;
+  llmLatencyP50: number;
+  llmLatencyP99: number;
+  redisHitRate: number;
+  macroTickDurationSecs: number | null;
 }
 
 export interface LedgerEntry {
@@ -179,10 +197,30 @@ export interface Investor {
   portfolioValue: number;
 }
 
+export interface StockListItem {
+  ticker: string;
+  name: string;
+  sector: string;
+  parent: { ticker: string; name: string };
+  price: number | null;
+}
+
+export interface StockDetail extends StockListItem {
+  ohlcv: {
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    macro_tick: number;
+  } | null;
+}
+
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 
 const mockMarketStatus: MarketStatus = {
   isOpen: true,
+  phase: "RUNNING",
   dayNumber: 1,
   dayTickCounter: 5,
   ticksPerDay: 18,
@@ -288,6 +326,12 @@ const mockPlatformMetrics: PlatformMetrics = {
   totalVolume: 2487693,
   marketCap: 156000000,
   activeToday: 67,
+  connectedWsUsers: 0,
+  orderRatePerMin: 0,
+  llmLatencyP50: 0,
+  llmLatencyP99: 0,
+  redisHitRate: 0,
+  macroTickDurationSecs: null,
 };
 
 const mockLedgerEntries: LedgerEntry[] = [
@@ -307,25 +351,25 @@ const mockInvestors: Investor[] = [
 
 // ─── Core Fetch Wrapper ────────────────────────────────────────────────────────
 
-async function apiFetch<T>(
+async function apiFetch<T, Raw = T>(
   endpoint: string,
   options: RequestInit = {},
-  mockData?: T
+  mockData?: T,
+  transform?: (data: Raw) => T
 ): Promise<ApiResponse<T>> {
   if (USE_MOCK && mockData !== undefined) {
-    // Simulate network delay in dev
     await new Promise((r) => setTimeout(r, 100 + Math.random() * 200));
     return { data: mockData, error: null, status: 200 };
   }
 
   try {
+    const token = _tokenGetter ? await _tokenGetter() : null;
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
-        // TODO: Add Clerk auth token when integrated
-        // "Authorization": `Bearer ${token}`,
+        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       },
     });
 
@@ -334,7 +378,8 @@ async function apiFetch<T>(
       return { data: null, error: errorBody || res.statusText, status: res.status };
     }
 
-    const data = await res.json();
+    const raw = await res.json();
+    const data: T = transform ? transform(raw as Raw) : raw;
     return { data, error: null, status: res.status };
   } catch (err) {
     return { data: null, error: (err as Error).message, status: 0 };
@@ -346,55 +391,109 @@ async function apiFetch<T>(
 // === Market Status & Admin ===
 
 export async function getMarketStatus(): Promise<ApiResponse<MarketStatus>> {
-  return apiFetch("/admin/market/status", {}, mockMarketStatus);
+  return apiFetch<MarketStatus, Record<string, unknown>>(
+    "/admin/market/status",
+    {},
+    mockMarketStatus,
+    (raw) => ({
+      isOpen: Boolean(raw.is_open),
+      phase: String(raw.phase ?? "IDLE"),
+      dayNumber: Number(raw.day_number ?? 0),
+      dayTickCounter: Number(raw.day_tick_counter ?? 0),
+      ticksPerDay: Number(raw.ticks_per_day ?? 18),
+      lastUpdated: new Date().toISOString(),
+    })
+  );
 }
 
-export async function toggleMarketStatus(open: boolean): Promise<ApiResponse<MarketStatus>> {
-  return apiFetch(
-    "/admin/market/toggle",
-    { method: "POST", body: JSON.stringify({ open }) },
-    { ...mockMarketStatus, isOpen: open }
-  );
+// currentPhase: the phase value from the last getMarketStatus() call
+// IDLE → start, RUNNING → pause, PAUSED|DAY_ENDED → resume
+export async function toggleMarketStatus(currentPhase: string): Promise<ApiResponse<{ ok: boolean }>> {
+  let endpoint: string;
+  if (currentPhase === "IDLE") endpoint = "/admin/market/start";
+  else if (currentPhase === "RUNNING") endpoint = "/admin/market/pause";
+  else if (currentPhase === "PAUSED" || currentPhase === "DAY_ENDED") endpoint = "/admin/market/resume";
+  else return { data: null, error: `Cannot toggle market from phase: ${currentPhase}`, status: 409 };
+
+  return apiFetch(endpoint, { method: "POST" }, { ok: true });
 }
 
 export type MarketDay = { dayNumber: number; dayTickCounter: number; ticksPerDay: number };
 
 export async function getMarketDay(): Promise<ApiResponse<MarketDay>> {
-  return apiFetch(
+  return apiFetch<MarketDay, Record<string, unknown>>(
     "/admin/market/day",
     {},
-    { dayNumber: mockMarketStatus.dayNumber, dayTickCounter: mockMarketStatus.dayTickCounter, ticksPerDay: mockMarketStatus.ticksPerDay }
+    { dayNumber: mockMarketStatus.dayNumber, dayTickCounter: mockMarketStatus.dayTickCounter, ticksPerDay: mockMarketStatus.ticksPerDay },
+    (raw) => ({
+      dayNumber: Number(raw.day_number ?? 0),
+      dayTickCounter: Number(raw.day_tick_counter ?? 0),
+      ticksPerDay: Number(raw.ticks_per_day ?? 18),
+    })
   );
 }
 
+const normalizeSessionConfig = (raw: Record<string, unknown>): SessionConfig => ({
+  ticksPerDay: Number(raw.ticks_per_day ?? 18),
+  macroTickSeconds: Number(raw.macro_tick_interval_secs ?? 1200),
+  microTickSeconds: Number(raw.micro_tick_interval_secs ?? 5),
+  circuitBreakerPctMicro: Number(raw.circuit_breaker_micro_pct ?? 3),
+  circuitBreakerPctMacro: Number(raw.circuit_breaker_macro_pct ?? 10),
+});
+
 export async function getSessionConfig(): Promise<ApiResponse<SessionConfig>> {
-  return apiFetch("/admin/session/config", {}, mockSessionConfig);
+  return apiFetch<SessionConfig, Record<string, unknown>>(
+    "/admin/session/config", {}, mockSessionConfig, normalizeSessionConfig
+  );
 }
 
 export async function updateSessionConfig(config: Partial<SessionConfig>): Promise<ApiResponse<SessionConfig>> {
-  return apiFetch(
+  // Map camelCase frontend keys to snake_case DB column names
+  const body: Record<string, unknown> = {};
+  if (config.ticksPerDay !== undefined) body.ticks_per_day = config.ticksPerDay;
+  if (config.macroTickSeconds !== undefined) body.macro_tick_interval_secs = config.macroTickSeconds;
+  if (config.microTickSeconds !== undefined) body.micro_tick_interval_secs = config.microTickSeconds;
+  if (config.circuitBreakerPctMicro !== undefined) body.circuit_breaker_micro_pct = config.circuitBreakerPctMicro;
+  if (config.circuitBreakerPctMacro !== undefined) body.circuit_breaker_macro_pct = config.circuitBreakerPctMacro;
+
+  return apiFetch<SessionConfig, Record<string, unknown>>(
     "/admin/session/config",
-    { method: "PUT", body: JSON.stringify(config) },
-    { ...mockSessionConfig, ...config }
+    { method: "PUT", body: JSON.stringify(body) },
+    { ...mockSessionConfig, ...config },
+    normalizeSessionConfig
   );
 }
 
 // === Announcements ===
 
+type RawAnnouncement = { id: string; title: string; content: string; is_pinned: boolean; published_at: string };
+const normalizeAnnouncement = (raw: RawAnnouncement): Announcement => ({
+  id: String(raw.id),
+  title: raw.title,
+  content: raw.content,
+  timestamp: new Date(raw.published_at).getTime(),
+  priority: raw.is_pinned ? "HIGH" : "NORMAL",
+});
+
 export async function getAnnouncements(): Promise<ApiResponse<Announcement[]>> {
-  return apiFetch("/market/announcements", {}, mockAnnouncements);
+  return apiFetch<Announcement[], RawAnnouncement[]>(
+    "/market/announcements", {}, mockAnnouncements,
+    (rows) => rows.map(normalizeAnnouncement)
+  );
 }
 
 export async function createAnnouncement(announcement: Omit<Announcement, "id" | "timestamp">): Promise<ApiResponse<Announcement>> {
-  const newAnn: Announcement = {
-    id: `ANN-${Date.now()}`,
-    ...announcement,
-    timestamp: Date.now(),
+  const newAnn: Announcement = { id: `ANN-${Date.now()}`, ...announcement, timestamp: Date.now() };
+  const body = {
+    title: announcement.title,
+    content: announcement.content,
+    is_pinned: announcement.priority === "HIGH",
   };
-  return apiFetch(
+  return apiFetch<Announcement, RawAnnouncement>(
     "/admin/announcements",
-    { method: "POST", body: JSON.stringify(announcement) },
-    newAnn
+    { method: "POST", body: JSON.stringify(body) },
+    newAnn,
+    normalizeAnnouncement
   );
 }
 
@@ -550,6 +649,28 @@ export async function triggerScandal(ticker: string, magnitude: number): Promise
   );
 }
 
+// === Portfolio ===
+
+export interface PortfolioHolding {
+  ticker: string;
+  name: string;
+  sector: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number | null;
+  pnl: number | null;
+  updated_at: string;
+}
+
+export interface Portfolio {
+  balance: number;
+  holdings: PortfolioHolding[];
+}
+
+export async function getPortfolio(): Promise<ApiResponse<Portfolio>> {
+  return apiFetch<Portfolio>("/investor/portfolio", {}, { balance: 0, holdings: [] });
+}
+
 // === Portfolio Analysis ===
 
 export async function getPortfolioAnalysis(): Promise<ApiResponse<PortfolioAnalysis>> {
@@ -586,18 +707,36 @@ export async function markAllNotificationsRead(): Promise<ApiResponse<{ success:
 
 // === Watchlist with Price Alerts ===
 
-export async function addToWatchlistWithAlerts(
-  ticker: string,
-  priceAlertAbove?: number,
-  priceAlertBelow?: number
-): Promise<ApiResponse<{ success: boolean }>> {
+export interface WatchlistItem {
+  id: string;
+  ticker: string;
+  name: string;
+  sector: string;
+  price_alert_above: number | null;
+  price_alert_below: number | null;
+  alert_above_armed: boolean;
+  alert_below_armed: boolean;
+  added_at: string;
+  current_price: number | null;
+}
+
+export async function getWatchlist(): Promise<ApiResponse<WatchlistItem[]>> {
+  return apiFetch<WatchlistItem[]>("/investor/watchlist", {}, []);
+}
+
+export async function addToWatchlist(ticker: string): Promise<ApiResponse<{ ok: boolean }>> {
   return apiFetch(
     "/investor/watchlist",
-    {
-      method: "POST",
-      body: JSON.stringify({ ticker, priceAlertAbove, priceAlertBelow }),
-    },
-    { success: true }
+    { method: "POST", body: JSON.stringify({ ticker }) },
+    { ok: true }
+  );
+}
+
+export async function removeFromWatchlist(ticker: string): Promise<ApiResponse<{ ok: boolean }>> {
+  return apiFetch(
+    `/investor/watchlist/${ticker}`,
+    { method: "DELETE" },
+    { ok: true }
   );
 }
 
@@ -605,21 +744,39 @@ export async function updatePriceAlerts(
   ticker: string,
   priceAlertAbove?: number | null,
   priceAlertBelow?: number | null
-): Promise<ApiResponse<{ success: boolean }>> {
+): Promise<ApiResponse<{ ok: boolean }>> {
   return apiFetch(
-    `/investor/watchlist/${ticker}/alerts`,
+    `/investor/watchlist/${ticker}`,
     {
       method: "PUT",
-      body: JSON.stringify({ priceAlertAbove, priceAlertBelow }),
+      body: JSON.stringify({ price_alert_above: priceAlertAbove, price_alert_below: priceAlertBelow }),
     },
-    { success: true }
+    { ok: true }
   );
 }
 
 // === Admin Metrics ===
 
 export async function getPlatformMetrics(): Promise<ApiResponse<PlatformMetrics>> {
-  return apiFetch("/admin/metrics", {}, mockPlatformMetrics);
+  return apiFetch<PlatformMetrics, Record<string, unknown>>(
+    "/admin/metrics",
+    {},
+    mockPlatformMetrics,
+    (raw) => ({
+      totalInvestors:        Number(raw.total_investors ?? 0),
+      totalCompanies:        Number(raw.total_companies ?? 0),
+      totalTrades:           Number(raw.total_trades ?? 0),
+      totalVolume:           Number(raw.total_volume ?? 0),
+      marketCap:             0,
+      activeToday:           Number(raw.active_today ?? 0),
+      connectedWsUsers:      Number(raw.connected_ws_users ?? 0),
+      orderRatePerMin:       Number(raw.order_rate_per_min ?? 0),
+      llmLatencyP50:         Number((raw.llm_latency_p50_p99 as Record<string, number>)?.p50 ?? 0),
+      llmLatencyP99:         Number((raw.llm_latency_p50_p99 as Record<string, number>)?.p99 ?? 0),
+      redisHitRate:          Number(raw.redis_hit_rate ?? 0),
+      macroTickDurationSecs: raw.macro_tick_duration_secs != null ? Number(raw.macro_tick_duration_secs) : null,
+    })
+  );
 }
 
 // === Admin Ledger ===
@@ -633,10 +790,30 @@ export async function getLedger(params?: {
   limit?: number;
 }): Promise<ApiResponse<{ entries: LedgerEntry[]; total: number; page: number; limit: number }>> {
   const query = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-  return apiFetch(
+  return apiFetch<
+    { entries: LedgerEntry[]; total: number; page: number; limit: number },
+    { rows: Record<string, unknown>[]; total: number; limit: number; offset: number }
+  >(
     `/admin/ledger${query}`,
     {},
-    { entries: mockLedgerEntries, total: mockLedgerEntries.length, page: 1, limit: 50 }
+    { entries: mockLedgerEntries, total: mockLedgerEntries.length, page: 1, limit: 50 },
+    (raw) => ({
+      entries: (raw.rows ?? []).map((r) => ({
+        id:         String(r.id ?? ""),
+        timestamp:  String(r.created_at ?? ""),
+        type:       String(r.event_type ?? "BUY") as LedgerEntry["type"],
+        ticker:     String(r.subsidiary_id ?? ""),
+        qty:        Number(r.quantity ?? 0),
+        price:      Number(r.price_per_unit ?? 0),
+        buyerId:    r.investor_id ? String(r.investor_id) : null,
+        sellerId:   null,
+        buyerName:  null,
+        sellerName: null,
+      })),
+      total:  Number(raw.total ?? 0),
+      page:   Math.floor(Number(raw.offset ?? 0) / Number(raw.limit ?? 100)) + 1,
+      limit:  Number(raw.limit ?? 100),
+    })
   );
 }
 
@@ -648,10 +825,27 @@ export async function getInvestors(params?: {
   limit?: number;
 }): Promise<ApiResponse<{ investors: Investor[]; total: number }>> {
   const query = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-  return apiFetch(
+  return apiFetch<
+    { investors: Investor[]; total: number },
+    { rows: Record<string, unknown>[]; total: number }
+  >(
     `/admin/investors${query}`,
     {},
-    { investors: mockInvestors, total: mockInvestors.length }
+    { investors: mockInvestors, total: mockInvestors.length },
+    (raw) => ({
+      investors: (raw.rows ?? []).map((r) => ({
+        investorId:     String(r.id ?? ""),
+        email:          String(r.email ?? ""),
+        name:           String(r.email ?? "").split("@")[0],
+        balance:        Number(r.balance ?? 0),
+        kycStatus:      (r.kyc_status as Investor["kycStatus"]) ?? "PENDING",
+        joinedAt:       String(r.created_at ?? ""),
+        isSuspended:    false,
+        totalTrades:    Number(r.trade_count ?? 0),
+        portfolioValue: 0,
+      })),
+      total: Number(raw.total ?? 0),
+    })
   );
 }
 
@@ -672,10 +866,198 @@ export async function adjustInvestorBalance(id: string, amount: number, reason: 
   );
 }
 
+export async function topupInvestor(id: string, amount: number): Promise<ApiResponse<{ ok: boolean; new_balance: number }>> {
+  return apiFetch(
+    `/admin/investors/${id}/topup`,
+    { method: "POST", body: JSON.stringify({ amount }) },
+    { ok: true, new_balance: amount }
+  );
+}
+
 export async function suspendInvestor(id: string, suspend: boolean): Promise<ApiResponse<{ success: boolean }>> {
   return apiFetch(
     `/admin/investors/${id}/suspend`,
     { method: "POST", body: JSON.stringify({ suspend }) },
     { success: true }
+  );
+}
+
+// === Market Stocks ===
+// In mock mode both functions return empty/null so pages fall back to mockData.
+
+export async function getStocks(): Promise<ApiResponse<StockListItem[]>> {
+  return apiFetch<StockListItem[]>("/market/stocks", {}, []);
+}
+
+export async function getStock(ticker: string): Promise<ApiResponse<StockDetail | null>> {
+  return apiFetch<StockDetail | null>(`/market/stocks/${ticker.toUpperCase()}`, {}, null);
+}
+
+// === ETFs ===
+
+export interface ETFListItem {
+  ticker: string;
+  name: string;
+  category: string;
+  benchmark_index: string | null;
+  expense_ratio_bps: number;
+  shares_outstanding: number;
+  nav: number;
+  price: number;
+}
+
+export interface ETFNavPoint {
+  macro_tick: number;
+  micro_tick: number;
+  nav: number;
+  market_price: number;
+  recorded_at: string;
+}
+
+export interface ETFDetail extends ETFListItem {
+  nav_history: ETFNavPoint[];
+}
+
+export interface ETFHolding {
+  ticker: string;
+  name: string;
+  sector: string;
+  weight: number;
+  price: number | null;
+}
+
+export async function getEtfs(): Promise<ApiResponse<ETFListItem[]>> {
+  return apiFetch<ETFListItem[]>("/market/etfs", {}, []);
+}
+
+export async function getEtf(ticker: string): Promise<ApiResponse<ETFDetail | null>> {
+  return apiFetch<ETFDetail | null>(`/market/etfs/${ticker.toUpperCase()}`, {}, null);
+}
+
+export async function getEtfHoldings(ticker: string): Promise<ApiResponse<ETFHolding[]>> {
+  return apiFetch<ETFHolding[]>(`/market/etfs/${ticker.toUpperCase()}/holdings`, {}, []);
+}
+
+// === News ===
+
+export interface NewsItem {
+  id: string;
+  headline: string;
+  body: string;
+  related_tickers: string[];
+  sentiment: number;
+  source: string;
+  macro_tick: number;
+  published_at: string | null;
+}
+
+export async function getNews(params?: {
+  limit?: number;
+  offset?: number;
+  ticker?: string;
+}): Promise<ApiResponse<NewsItem[]>> {
+  const q = new URLSearchParams();
+  if (params?.limit)  q.set('limit',  String(params.limit));
+  if (params?.offset) q.set('offset', String(params.offset));
+  if (params?.ticker) q.set('ticker', params.ticker);
+  const qs = q.toString() ? `?${q}` : '';
+  return apiFetch<NewsItem[]>(`/market/news${qs}`, {}, []);
+}
+
+export async function getNewsItem(id: string): Promise<ApiResponse<NewsItem | null>> {
+  return apiFetch<NewsItem | null>(`/market/news/${id}`, {}, null);
+}
+
+// === Screener ===
+
+export interface ScreenerItem {
+  ticker: string;
+  name: string;
+  sector: string;
+  price: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  market_cap: number | null;
+  pe_ratio: number | null;
+}
+
+export async function getScreener(params?: {
+  sector?: string;
+  min_price?: number;
+  max_price?: number;
+  min_change_pct?: number;
+  max_change_pct?: number;
+  min_pe?: number;
+  max_pe?: number;
+}): Promise<ApiResponse<ScreenerItem[]>> {
+  const q = new URLSearchParams();
+  if (params?.sector)         q.set('sector',         params.sector);
+  if (params?.min_price)      q.set('min_price',      String(params.min_price));
+  if (params?.max_price)      q.set('max_price',      String(params.max_price));
+  if (params?.min_change_pct) q.set('min_change_pct', String(params.min_change_pct));
+  if (params?.max_change_pct) q.set('max_change_pct', String(params.max_change_pct));
+  if (params?.min_pe)         q.set('min_pe',         String(params.min_pe));
+  if (params?.max_pe)         q.set('max_pe',         String(params.max_pe));
+  const qs = q.toString() ? `?${q}` : '';
+  return apiFetch<ScreenerItem[]>(`/market/screener${qs}`, {}, []);
+}
+
+// === IPO ===
+
+export interface IpoListing {
+  id: string;
+  status: "UPCOMING" | "LIVE" | "CLOSED" | "LISTED";
+  price_band_low: number;
+  price_band_high: number;
+  lot_size: number;
+  max_lots_per_investor: number;
+  open_date: string;
+  close_date: string;
+  subscription_times: number | null;
+  opening_price: number | null;
+  ticker: string;
+  name: string;
+  sector: string;
+  total_applicants?: number;
+  total_lots_applied?: number;
+}
+
+export interface IpoApplication {
+  application_id: string;
+  ipo_id: string;
+  lots_applied: number;
+  lots_allotted: number | null;
+  amount_blocked: number;
+  application_status: string;
+  applied_at: string;
+  ticker: string;
+  name: string;
+}
+
+export async function getIpoListings(): Promise<ApiResponse<IpoListing[]>> {
+  return apiFetch<IpoListing[]>("/market/ipo", {}, []);
+}
+
+export async function getIpoListing(id: string): Promise<ApiResponse<IpoListing | null>> {
+  return apiFetch<IpoListing | null>(`/market/ipo/${id}`, {}, null);
+}
+
+export async function getMyIpoApplications(): Promise<ApiResponse<IpoApplication[]>> {
+  return apiFetch<IpoApplication[]>("/investor/ipo", {}, []);
+}
+
+export async function applyForIpo(ipoId: string, lots: number): Promise<ApiResponse<{ ok: boolean; error?: string }>> {
+  return apiFetch(
+    "/investor/ipo/apply",
+    { method: "POST", body: JSON.stringify({ ipo_id: ipoId, lots }) },
+    { ok: true }
+  );
+}
+
+export async function withdrawIpoApplication(ipoId: string): Promise<ApiResponse<{ ok: boolean }>> {
+  return apiFetch(
+    `/investor/ipo/${ipoId}`,
+    { method: "DELETE" },
+    { ok: true }
   );
 }

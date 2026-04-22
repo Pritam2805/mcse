@@ -54,3 +54,9 @@ android-app/build/
 android-app/*.aab
 android-app/*.apk
 android-app/local.properties
+
+structure_snapshot
+FRAMEWORK.md
+ROADMAP.md
+
+.claude
