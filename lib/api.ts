@@ -417,6 +417,19 @@ async function apiFetch<T, Raw = T>(
 
 // ─── API Methods ───────────────────────────────────────────────────────────────
 
+// === Auth ===
+
+// Bootstrap call on first sign-in: idempotently inserts the investors row + seeds
+// starting cash. Backend uses ON CONFLICT DO UPDATE, so re-calling on every session
+// boot is safe and cheap.
+export async function bootstrapInvestor(): Promise<ApiResponse<{ ok: boolean; userId: string }>> {
+  return apiFetch<{ ok: boolean; userId: string }>(
+    "/auth/login",
+    { method: "POST" },
+    { ok: true, userId: "mock" },
+  );
+}
+
 // === Market Status & Admin ===
 
 export async function getMarketStatus(): Promise<ApiResponse<MarketStatus>> {

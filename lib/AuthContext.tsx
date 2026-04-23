@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useAuth as useClerkAuth, useUser, useClerk } from "@clerk/nextjs";
-import { registerTokenGetter } from "@/lib/api";
+import { bootstrapInvestor, registerTokenGetter } from "@/lib/api";
 
 export type UserRole = "user" | "company" | "admin";
 
@@ -41,6 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     registerTokenGetter(() => getToken());
   }, [getToken]);
+
+  // First-login bootstrap: POST /auth/login provisions the investors row + seeds
+  // ₹100k starting cash on the backend. Without this, IPO apply / order placement
+  // fails with FK violations on the investors table. Idempotent server-side, but
+  // we still gate per-session with a ref to avoid noisy refires across remounts.
+  const bootstrappedRef = useRef(false);
+  useEffect(() => {
+    if (!isSignedIn || bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
+    bootstrapInvestor().catch(() => {
+      // Failure here means investor-only endpoints will 4xx; allow a retry next mount.
+      bootstrappedRef.current = false;
+    });
+  }, [isSignedIn]);
 
   const rawRole = user?.publicMetadata?.role;
   const role = deriveRole(rawRole);
