@@ -35,7 +35,7 @@ function deriveRole(raw: unknown): UserRole | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { isSignedIn, getToken } = useClerkAuth();
   const { user } = useUser();
-  const { signOut } = useClerk();
+  const { signOut, redirectToSignIn } = useClerk();
 
   // Register Clerk's getToken with the API client so every request gets a Bearer token
   useEffect(() => {
@@ -48,11 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 
   const login = () => {
-    window.location.href = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in";
+    // On a Clerk satellite, redirectToSignIn() builds the cross-domain handshake URL
+    // (with __clerk_satellite_url + redirect_url back to this origin) so the user
+    // returns to mcse.in after authenticating on mu-aeon.com.
+    const returnTo = typeof window !== "undefined" ? `${window.location.origin}/` : "/";
+    redirectToSignIn({ redirectUrl: returnTo });
   };
 
   const logout = () => {
-    signOut({ redirectUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL });
+    const returnTo = typeof window !== "undefined" ? `${window.location.origin}/` : "/";
+    signOut({ redirectUrl: returnTo });
   };
 
   const value = useMemo(() => ({
