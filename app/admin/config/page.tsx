@@ -8,8 +8,18 @@ import { useAuth } from "@/lib/AuthContext";
 import { getSessionConfig, updateSessionConfig, type SessionConfig } from "@/lib/api";
 import { Skeleton } from "@/components/Skeleton";
 
+type NumericConfigKey =
+  | "ticksPerDay"
+  | "dayDurationSeconds"
+  | "premarketDurationSeconds"
+  | "allotmentPostedDurationSeconds"
+  | "macroTickSeconds"
+  | "microTickSeconds"
+  | "circuitBreakerPctMicro"
+  | "circuitBreakerPctMacro";
+
 const CONFIG_FIELDS: {
-  key: keyof SessionConfig;
+  key: NumericConfigKey;
   label: string;
   description: string;
   min: number;
@@ -19,17 +29,44 @@ const CONFIG_FIELDS: {
 }[] = [
   {
     key: "ticksPerDay",
-    label: "Ticks Per Day",
-    description: "Number of macro ticks in one market day. Market auto-closes when this count is reached.",
+    label: "Expected Ticks Per Day (informational)",
+    description: "Target macro ticks per trading day. Wall-clock drives day-end; this is informational only.",
     min: 6,
-    max: 36,
+    max: 60,
     step: 1,
     unit: "ticks",
   },
   {
+    key: "dayDurationSeconds",
+    label: "Trading Day Duration",
+    description: "Wall-clock length of DAY_1 and DAY_2 (default 27000 = 7.5 h per spec).",
+    min: 3600,
+    max: 43200,
+    step: 900,
+    unit: "seconds",
+  },
+  {
+    key: "premarketDurationSeconds",
+    label: "PRE_MARKET (IPO Open) Duration",
+    description: "Default 81000 (22.5 h) — spans 23 Apr 18:30 → 24 Apr 17:00 IST.",
+    min: 3600,
+    max: 129600,
+    step: 900,
+    unit: "seconds",
+  },
+  {
+    key: "allotmentPostedDurationSeconds",
+    label: "Allotment-Posted Read-Only Duration",
+    description: "Default 61200 (17 h) — 24 Apr 17:00 → 25 Apr 10:00 IST. Site is read-only during this phase.",
+    min: 3600,
+    max: 129600,
+    step: 900,
+    unit: "seconds",
+  },
+  {
     key: "macroTickSeconds",
-    label: "Macro Tick Duration",
-    description: "Duration of each macro tick in seconds. Default is 1200 (20 minutes).",
+    label: "Macro Tick Target Duration",
+    description: "Target duration of each macro tick in seconds (pipeline-driven; actual varies).",
     min: 60,
     max: 3600,
     step: 60,
@@ -108,11 +145,27 @@ export default function SessionConfigPage() {
     }
   }
 
-  function updateField(key: keyof SessionConfig, value: number) {
+  function updateField(key: NumericConfigKey, value: number) {
     if (config) {
       setConfig({ ...config, [key]: value });
     }
   }
+
+  function updatePhaseScheduleJson(value: string) {
+    if (config) {
+      setConfig({ ...config, phaseScheduleJson: value });
+    }
+  }
+
+  const phaseScheduleIsValidJson = (() => {
+    if (!config) return true;
+    try {
+      JSON.parse(config.phaseScheduleJson);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
 
   // Access control
   if (!isLoggedIn || role !== "admin") {
@@ -178,9 +231,9 @@ export default function SessionConfigPage() {
           )}
           <button
             onClick={handleSave}
-            disabled={!hasChanges || saving}
+            disabled={!hasChanges || saving || !phaseScheduleIsValidJson}
             className={`flex items-center gap-2 px-4 py-2 text-[10px] tracking-[0.1em] font-semibold transition-all ${
-              hasChanges && !saving
+              hasChanges && !saving && phaseScheduleIsValidJson
                 ? "bg-white text-black hover:bg-white/90"
                 : "bg-white/10 text-white/30 cursor-not-allowed"
             }`}
@@ -248,7 +301,7 @@ export default function SessionConfigPage() {
                   min={field.min}
                   max={field.max}
                   step={field.step}
-                  value={config[field.key]}
+                  value={config[field.key] as number}
                   onChange={(e) => updateField(field.key, parseFloat(e.target.value))}
                   className="flex-1 h-1.5 bg-white/10 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
                 />
@@ -256,6 +309,33 @@ export default function SessionConfigPage() {
               </div>
             </motion.div>
           ))}
+
+          {/* Phase Schedule JSON editor */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: CONFIG_FIELDS.length * 0.05 }}
+            className="border border-white/10 p-5"
+          >
+            <div className="mb-3">
+              <p className="text-[12px] font-medium text-white/80">Phase Schedule (IST timestamps)</p>
+              <p className="text-[10px] text-white/30 mt-1 max-w-md">
+                Wall-clock boundaries for PRE_MARKET, ALLOTMENT_POSTED, DAY_1, DAY_END_1, DAY_2, EVENT_END.
+                Edit as raw JSON — the engine re-reads on next macro tick.
+              </p>
+            </div>
+            <textarea
+              value={config.phaseScheduleJson}
+              onChange={(e) => updatePhaseScheduleJson(e.target.value)}
+              rows={10}
+              className={`w-full bg-black/40 text-[11px] font-mono p-3 border ${
+                phaseScheduleIsValidJson ? "border-white/10" : "border-down"
+              } text-white/80 focus:outline-none focus:border-white/30`}
+            />
+            {!phaseScheduleIsValidJson && (
+              <p className="text-[10px] text-down mt-1">Invalid JSON — save is disabled</p>
+            )}
+          </motion.div>
 
           {/* Warning */}
           <motion.div

@@ -454,10 +454,10 @@ export const portfolioAnalysis = {
   investedValue: 421500.0,
   totalReturns: 66193.69,
   totalReturnsPercent: 15.71,
-  xirr: 13.29,
+  eventReturnPct: 13.29,
   benchmarkName: "AEON 50",
-  benchmarkReturn: 2.40,
-  outperformance: 10.89,
+  benchmarkAeon50Pct: 2.40,
+  alphaPct: 10.89,
   sectorAllocation: [
     { sector: "Education", value: 28.0 },
     { sector: "Technology", value: 18.5 },

@@ -19,6 +19,49 @@ import {
   stockDirectory,
   type MoverStock,
 } from "@/lib/mockData";
+import { getMarketStatus, type MarketStatus } from "@/lib/api";
+
+const PHASE_LABEL: Record<MarketStatus["phase"], string> = {
+  IDLE: "COMING SOON",
+  PRE_MARKET: "IPO OPEN",
+  ALLOTMENT_POSTED: "ALLOTMENT POSTED",
+  DAY_1: "DAY 1 / 2",
+  DAY_END_1: "DAY 1 CLOSED",
+  DAY_2: "DAY 2 / 2",
+  EVENT_END: "EVENT CLOSED",
+  PAUSED: "PAUSED",
+};
+
+function PhaseBadge() {
+  const [status, setStatus] = useState<MarketStatus | null>(null);
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const res = await getMarketStatus();
+      if (active && res.data) setStatus(res.data);
+    };
+    load();
+    const id = setInterval(load, 15_000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+  if (!status || status.phase === "IDLE") return null;
+  const label = PHASE_LABEL[status.phase] ?? status.phase;
+  const remaining = status.phaseEndsAt
+    ? (() => {
+        const diff = new Date(status.phaseEndsAt!).getTime() - Date.now();
+        if (diff <= 0) return "";
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor(diff / 60000) % 60;
+        return ` · ${h}:${m.toString().padStart(2, "0")} LEFT`;
+      })()
+    : "";
+  return (
+    <div className="inline-flex items-center gap-2 px-3 py-1 border border-white/20 bg-white/[0.03]">
+      <span className={`w-1.5 h-1.5 rounded-full ${status.isOpen ? "bg-up animate-pulse" : "bg-white/30"}`} />
+      <span className="text-[9px] tracking-[0.2em] text-white/80">{label}{remaining}</span>
+    </div>
+  );
+}
 
 const iconMap: Record<string, React.ElementType> = {
   target: Target, layers: Layers,
@@ -52,7 +95,8 @@ export default function ExplorePage() {
 
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   useEffect(() => {
-    const target = new Date("2026-04-24T15:00:00Z"); // 8:30 PM IST
+    // IPO (PRE_MARKET) opens 23 Apr 18:30 IST = 13:00 UTC
+    const target = new Date("2026-04-23T13:00:00Z");
     function tick() {
       const diff = target.getTime() - Date.now();
       if (diff <= 0) { setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 }); return; }
@@ -123,8 +167,9 @@ export default function ExplorePage() {
                 className="flex items-center gap-3"
               >
                 <span className="text-[9px] tracking-[0.3em] text-white/30">
-                  24 {"\u2014"} 26 APRIL {"\u00B7"} MAHINDRA UNIVERSITY
+                  23 {"\u2014"} 26 APRIL {"\u00B7"} MAHINDRA UNIVERSITY
                 </span>
+                <PhaseBadge />
                 <span className="hidden sm:flex items-center gap-2.5 ml-1">
                   <a href="https://www.mu-aeon.com" target="_blank" rel="noopener noreferrer" className="opacity-40 hover:opacity-100 transition-opacity">
                     <Image src="/aeon.png" alt="AEON" width={22} height={22} className="object-contain" />
@@ -187,7 +232,7 @@ export default function ExplorePage() {
                   transition={{ delay: 0.42, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                   className="mb-8"
                 >
-                  <p className="text-[8px] tracking-[0.25em] text-white/25 mb-2.5">OPENS APR 24 &#183; 8:30 PM IST</p>
+                  <p className="text-[8px] tracking-[0.25em] text-white/25 mb-2.5">IPO OPENS APR 23 &#183; 6:30 PM IST</p>
                   <div className="flex items-baseline gap-0">
                     {([
                       { label: "D", value: timeLeft.days },

@@ -106,21 +106,21 @@ export default function AnalysePage() {
             className="grid grid-cols-3 gap-[1px] bg-white/8 mb-7"
           >
             <div className="bg-bg p-4">
-              <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">XIRR</p>
-              <p className={`font-[var(--font-anton)] text-xl ${analysis.xirr >= 0 ? "text-up" : "text-down"}`}>
-                {analysis.xirr >= 0 ? "+" : ""}{analysis.xirr.toFixed(2)}%
+              <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">EVENT RETURN</p>
+              <p className={`font-[var(--font-anton)] text-xl ${analysis.eventReturnPct >= 0 ? "text-up" : "text-down"}`}>
+                {analysis.eventReturnPct >= 0 ? "+" : ""}{analysis.eventReturnPct.toFixed(2)}%
               </p>
             </div>
             <div className="bg-bg p-4">
-              <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">BENCHMARK RTN</p>
-              <p className={`font-[var(--font-anton)] text-xl ${analysis.benchmarkReturn >= 0 ? "text-up" : "text-down"}`}>
-                {analysis.benchmarkReturn >= 0 ? "+" : ""}{analysis.benchmarkReturn.toFixed(2)}%
+              <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">AEON 50</p>
+              <p className={`font-[var(--font-anton)] text-xl ${analysis.benchmarkAeon50Pct >= 0 ? "text-up" : "text-down"}`}>
+                {analysis.benchmarkAeon50Pct >= 0 ? "+" : ""}{analysis.benchmarkAeon50Pct.toFixed(2)}%
               </p>
             </div>
             <div className="bg-bg p-4">
               <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">ALPHA</p>
-              <p className={`font-[var(--font-anton)] text-xl ${analysis.alpha >= 0 ? "text-up" : "text-down"}`}>
-                {analysis.alpha >= 0 ? "+" : ""}{analysis.alpha.toFixed(2)}%
+              <p className={`font-[var(--font-anton)] text-xl ${analysis.alphaPct >= 0 ? "text-up" : "text-down"}`}>
+                {analysis.alphaPct >= 0 ? "+" : ""}{analysis.alphaPct.toFixed(2)}%
               </p>
             </div>
           </motion.div>

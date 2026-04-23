@@ -28,21 +28,36 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+export type MarketPhase =
+  | "IDLE"
+  | "PRE_MARKET"
+  | "ALLOTMENT_POSTED"
+  | "DAY_1"
+  | "DAY_END_1"
+  | "DAY_2"
+  | "EVENT_END"
+  | "PAUSED";
+
 export interface MarketStatus {
   isOpen: boolean;
-  phase: string;
+  phase: MarketPhase;
   dayNumber: number;
-  dayTickCounter: number;
+  dayMacroTicksElapsed: number;
   ticksPerDay: number;
+  phaseEndsAt: string | null;
   lastUpdated: string;
 }
 
 export interface SessionConfig {
   ticksPerDay: number;
+  dayDurationSeconds: number;
+  premarketDurationSeconds: number;
+  allotmentPostedDurationSeconds: number;
   macroTickSeconds: number;
   microTickSeconds: number;
   circuitBreakerPctMicro: number;
   circuitBreakerPctMacro: number;
+  phaseScheduleJson: string;
 }
 
 export interface Announcement {
@@ -127,14 +142,14 @@ export interface CredibilityData {
 }
 
 export interface PortfolioAnalysis {
-  xirr: number;
+  eventReturnPct: number;
   totalReturnPct: number;
   sectorAllocation: { sector: string; percentage: number; value: number }[];
   topGainers: { ticker: string; returnPct: number }[];
   topLosers: { ticker: string; returnPct: number }[];
   riskScore: number;
-  benchmarkReturn: number;
-  alpha: number;
+  benchmarkAeon50Pct: number;
+  alphaPct: number;
 }
 
 export interface Shareholder {
@@ -220,19 +235,33 @@ export interface StockDetail extends StockListItem {
 
 const mockMarketStatus: MarketStatus = {
   isOpen: true,
-  phase: "RUNNING",
+  phase: "DAY_1",
   dayNumber: 1,
-  dayTickCounter: 5,
-  ticksPerDay: 18,
+  dayMacroTicksElapsed: 5,
+  ticksPerDay: 40,
+  phaseEndsAt: "2026-04-25T17:30:00+05:30",
   lastUpdated: new Date().toISOString(),
 };
 
+const MOCK_PHASE_SCHEDULE = {
+  pre_market_opens_at: "2026-04-23T18:30:00+05:30",
+  pre_market_closes_at: "2026-04-24T17:00:00+05:30",
+  allotment_posted_ends_at: "2026-04-25T10:00:00+05:30",
+  day_1_ends_at: "2026-04-25T17:30:00+05:30",
+  day_2_opens_at: "2026-04-26T10:00:00+05:30",
+  day_2_ends_at: "2026-04-26T17:30:00+05:30",
+};
+
 const mockSessionConfig: SessionConfig = {
-  ticksPerDay: 18,
-  macroTickSeconds: 1200,
+  ticksPerDay: 40,
+  dayDurationSeconds: 27000,
+  premarketDurationSeconds: 81000,
+  allotmentPostedDurationSeconds: 61200,
+  macroTickSeconds: 675,
   microTickSeconds: 5,
   circuitBreakerPctMicro: 3,
   circuitBreakerPctMacro: 10,
+  phaseScheduleJson: JSON.stringify(MOCK_PHASE_SCHEDULE),
 };
 
 const mockAnnouncements: Announcement[] = [
@@ -281,7 +310,7 @@ const mockCredibility: CredibilityData = {
 };
 
 const mockPortfolioAnalysis: PortfolioAnalysis = {
-  xirr: 18.4,
+  eventReturnPct: 18.4,
   totalReturnPct: 15.71,
   sectorAllocation: [
     { sector: "Technology", percentage: 42, value: 204830 },
@@ -299,8 +328,8 @@ const mockPortfolioAnalysis: PortfolioAnalysis = {
     { ticker: "INCON", returnPct: -1.8 },
   ],
   riskScore: 6.2,
-  benchmarkReturn: 12.8,
-  alpha: 5.6,
+  benchmarkAeon50Pct: 12.8,
+  alphaPct: 5.6,
 };
 
 const mockShareholders: Shareholder[] = [
@@ -397,48 +426,57 @@ export async function getMarketStatus(): Promise<ApiResponse<MarketStatus>> {
     mockMarketStatus,
     (raw) => ({
       isOpen: Boolean(raw.is_open),
-      phase: String(raw.phase ?? "IDLE"),
+      phase: (raw.phase as MarketPhase) ?? "IDLE",
       dayNumber: Number(raw.day_number ?? 0),
-      dayTickCounter: Number(raw.day_tick_counter ?? 0),
-      ticksPerDay: Number(raw.ticks_per_day ?? 18),
+      dayMacroTicksElapsed: Number(raw.day_macro_ticks_elapsed ?? raw.day_tick_counter ?? 0),
+      ticksPerDay: Number(raw.ticks_per_day ?? 40),
+      phaseEndsAt: (raw.phase_ends_at as string) ?? null,
       lastUpdated: new Date().toISOString(),
     })
   );
 }
 
-// currentPhase: the phase value from the last getMarketStatus() call
-// IDLE → start, RUNNING → pause, PAUSED|DAY_ENDED → resume
-export async function toggleMarketStatus(currentPhase: string): Promise<ApiResponse<{ ok: boolean }>> {
+// Phase-aware admin action helper.
+//   IDLE                       → /admin/market/start
+//   DAY_1 | DAY_2 | PRE_MARKET → /admin/market/pause
+//   PAUSED | DAY_END_1         → /admin/market/resume
+export async function toggleMarketStatus(currentPhase: MarketPhase): Promise<ApiResponse<{ ok: boolean }>> {
   let endpoint: string;
   if (currentPhase === "IDLE") endpoint = "/admin/market/start";
-  else if (currentPhase === "RUNNING") endpoint = "/admin/market/pause";
-  else if (currentPhase === "PAUSED" || currentPhase === "DAY_ENDED") endpoint = "/admin/market/resume";
+  else if (currentPhase === "PRE_MARKET" || currentPhase === "DAY_1" || currentPhase === "DAY_2") endpoint = "/admin/market/pause";
+  else if (currentPhase === "PAUSED" || currentPhase === "DAY_END_1" || currentPhase === "ALLOTMENT_POSTED") endpoint = "/admin/market/resume";
   else return { data: null, error: `Cannot toggle market from phase: ${currentPhase}`, status: 409 };
 
   return apiFetch(endpoint, { method: "POST" }, { ok: true });
 }
 
-export type MarketDay = { dayNumber: number; dayTickCounter: number; ticksPerDay: number };
+export type MarketDay = { dayNumber: number; dayMacroTicksElapsed: number; ticksPerDay: number };
 
 export async function getMarketDay(): Promise<ApiResponse<MarketDay>> {
   return apiFetch<MarketDay, Record<string, unknown>>(
     "/admin/market/day",
     {},
-    { dayNumber: mockMarketStatus.dayNumber, dayTickCounter: mockMarketStatus.dayTickCounter, ticksPerDay: mockMarketStatus.ticksPerDay },
+    { dayNumber: mockMarketStatus.dayNumber, dayMacroTicksElapsed: mockMarketStatus.dayMacroTicksElapsed, ticksPerDay: mockMarketStatus.ticksPerDay },
     (raw) => ({
       dayNumber: Number(raw.day_number ?? 0),
-      dayTickCounter: Number(raw.day_tick_counter ?? 0),
-      ticksPerDay: Number(raw.ticks_per_day ?? 18),
+      dayMacroTicksElapsed: Number(raw.day_macro_ticks_elapsed ?? raw.day_tick_counter ?? 0),
+      ticksPerDay: Number(raw.ticks_per_day ?? 40),
     })
   );
 }
 
 const normalizeSessionConfig = (raw: Record<string, unknown>): SessionConfig => ({
-  ticksPerDay: Number(raw.ticks_per_day ?? 18),
-  macroTickSeconds: Number(raw.macro_tick_interval_secs ?? 1200),
+  ticksPerDay: Number(raw.ticks_per_day ?? 40),
+  dayDurationSeconds: Number(raw.day_duration_seconds ?? 27000),
+  premarketDurationSeconds: Number(raw.premarket_duration_seconds ?? 81000),
+  allotmentPostedDurationSeconds: Number(raw.allotment_posted_duration_seconds ?? 61200),
+  macroTickSeconds: Number(raw.macro_tick_interval_secs ?? 675),
   microTickSeconds: Number(raw.micro_tick_interval_secs ?? 5),
   circuitBreakerPctMicro: Number(raw.circuit_breaker_micro_pct ?? 3),
   circuitBreakerPctMacro: Number(raw.circuit_breaker_macro_pct ?? 10),
+  phaseScheduleJson: typeof raw.phase_schedule_json === "string"
+    ? (raw.phase_schedule_json as string)
+    : JSON.stringify(raw.phase_schedule_json ?? MOCK_PHASE_SCHEDULE),
 });
 
 export async function getSessionConfig(): Promise<ApiResponse<SessionConfig>> {
@@ -451,10 +489,14 @@ export async function updateSessionConfig(config: Partial<SessionConfig>): Promi
   // Map camelCase frontend keys to snake_case DB column names
   const body: Record<string, unknown> = {};
   if (config.ticksPerDay !== undefined) body.ticks_per_day = config.ticksPerDay;
+  if (config.dayDurationSeconds !== undefined) body.day_duration_seconds = config.dayDurationSeconds;
+  if (config.premarketDurationSeconds !== undefined) body.premarket_duration_seconds = config.premarketDurationSeconds;
+  if (config.allotmentPostedDurationSeconds !== undefined) body.allotment_posted_duration_seconds = config.allotmentPostedDurationSeconds;
   if (config.macroTickSeconds !== undefined) body.macro_tick_interval_secs = config.macroTickSeconds;
   if (config.microTickSeconds !== undefined) body.micro_tick_interval_secs = config.microTickSeconds;
   if (config.circuitBreakerPctMicro !== undefined) body.circuit_breaker_micro_pct = config.circuitBreakerPctMicro;
   if (config.circuitBreakerPctMacro !== undefined) body.circuit_breaker_macro_pct = config.circuitBreakerPctMacro;
+  if (config.phaseScheduleJson !== undefined) body.phase_schedule_json = JSON.parse(config.phaseScheduleJson);
 
   return apiFetch<SessionConfig, Record<string, unknown>>(
     "/admin/session/config",
@@ -674,7 +716,21 @@ export async function getPortfolio(): Promise<ApiResponse<Portfolio>> {
 // === Portfolio Analysis ===
 
 export async function getPortfolioAnalysis(): Promise<ApiResponse<PortfolioAnalysis>> {
-  return apiFetch("/investor/portfolio/analysis", {}, mockPortfolioAnalysis);
+  return apiFetch<PortfolioAnalysis, Record<string, unknown>>(
+    "/investor/portfolio/analysis",
+    {},
+    mockPortfolioAnalysis,
+    (raw) => ({
+      eventReturnPct: Number(raw.eventReturnPct ?? raw.event_return_pct ?? 0),
+      totalReturnPct: Number(raw.totalReturnPct ?? raw.total_return_pct ?? 0),
+      sectorAllocation: (raw.sectorAllocation ?? raw.sector_allocation ?? []) as PortfolioAnalysis["sectorAllocation"],
+      topGainers: (raw.topGainers ?? raw.top_gainers ?? []) as PortfolioAnalysis["topGainers"],
+      topLosers: (raw.topLosers ?? raw.top_losers ?? []) as PortfolioAnalysis["topLosers"],
+      riskScore: Number(raw.riskScore ?? raw.risk_score ?? 0),
+      benchmarkAeon50Pct: Number(raw.benchmarkAeon50Pct ?? raw.benchmark_aeon50_pct ?? 0),
+      alphaPct: Number(raw.alphaPct ?? raw.alpha_pct ?? 0),
+    })
+  );
 }
 
 // === Shareholders ===
