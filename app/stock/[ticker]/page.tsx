@@ -33,24 +33,28 @@ export default function StockDetailPage({
   const [stockLoading, setStockLoading] = useState(true);
   const [screenerPrice, setScreenerPrice] = useState<number | null>(null);
   const [screenerChangePct, setScreenerChangePct] = useState<number | null>(null);
-  // Live price priority (LIVE data beats mock):
-  //   1. WebSocket liveTick  (realtime push)
-  //   2. apiStock.price      (REST — the live DB value)
-  //   3. screenerPrice       (screener REST — also live)
-  //   4. mockStock.price     (static seed — fallback only)
-  const displayPrice = liveTick?.price ?? apiStock?.price ?? screenerPrice ?? mockStock?.price ?? 0;
+  // Live price ONLY. Mock seed values were used as a fallback before; that
+  // caused the page to flash a stale ~₹0–₹500 mock value, then jump to
+  // screenerPrice, then to apiStock, then to the WS tick — visible price
+  // flicker every few seconds. Now we wait for at least one live source.
+  //   1. WebSocket liveTick   (realtime push)
+  //   2. apiStock.price       (REST poll, /api/market/stocks/[ticker])
+  //   3. screenerPrice        (screener REST — also live)
+  // If none are available yet, displayPrice is null → UI shows "—".
+  const livePrice =
+    liveTick?.price ?? apiStock?.price ?? screenerPrice ?? null;
+  const displayPrice = livePrice ?? 0;
+  const priceLoaded = livePrice !== null;
   const isLive = liveTick != null || apiStock != null;
 
   const effectiveChangePercent = useMemo(() => {
-    // Prefer live numbers; mock is last resort
     if (screenerChangePct !== null) return screenerChangePct;
     if (apiStock?.ohlcv && apiStock.ohlcv.open > 0) {
       const cur = liveTick?.price ?? apiStock.price ?? 0;
       return ((cur - apiStock.ohlcv.open) / apiStock.ohlcv.open) * 100;
     }
-    if (mockStock) return mockStock.changePercent;
     return 0;
-  }, [apiStock, liveTick, screenerChangePct, mockStock]);
+  }, [apiStock, liveTick, screenerChangePct]);
 
   const stock = useMemo(() => {
     // Merge: live apiStock wins for price/ohlcv/volume, mockStock provides
@@ -349,7 +353,9 @@ export default function StockDetailPage({
             className="mb-7 md:mb-8"
           >
             <p className="font-[var(--font-anton)] text-3xl md:text-4xl tracking-tight mb-1.5">
-              {"\u20B9"}{displayPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              {priceLoaded
+                ? `\u20B9${displayPrice.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                : "\u20B9\u2014"}
             </p>
             <div className="flex items-center gap-3">
               <p className={`text-[12px] font-medium ${stock.changePercent >= 0 ? "text-[#00D26A]" : "text-[#FF5252]"}`}>
