@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 
@@ -18,6 +19,25 @@ interface OrderConfirmModalProps {
 export default function OrderConfirmModal({
   open, onConfirm, onCancel, type, ticker, qty, price, pricingType, total,
 }: OrderConfirmModalProps) {
+  // Hard guard against double-click: once Confirm fires, we lock the button
+  // until the modal closes. Without this, two rapid clicks send two orders
+  // and the user pays 2x for 2x the quantity.
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      setSubmitting(false);
+      submittingRef.current = false;
+    }
+  }, [open]);
+
+  const handleConfirm = () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    onConfirm();
+  };
+
   const isBuy = type === "BUY";
   const color = isBuy ? "var(--color-up)" : "var(--color-down)";
 
@@ -83,16 +103,18 @@ export default function OrderConfirmModal({
             <div className="flex gap-0 border-t border-white/8">
               <button
                 onClick={onCancel}
-                className="flex-1 py-3.5 text-[10px] tracking-[0.15em] text-white/50 hover:text-white hover:bg-white/[0.03] transition-all border-r border-white/8"
+                disabled={submitting}
+                className="flex-1 py-3.5 text-[10px] tracking-[0.15em] text-white/50 hover:text-white hover:bg-white/[0.03] transition-all border-r border-white/8 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 CANCEL
               </button>
               <button
-                onClick={onConfirm}
-                className="flex-1 py-3.5 text-[10px] tracking-[0.15em] font-semibold transition-all"
+                onClick={handleConfirm}
+                disabled={submitting}
+                className="flex-1 py-3.5 text-[10px] tracking-[0.15em] font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ color, backgroundColor: `${color}15` }}
               >
-                CONFIRM {type}
+                {submitting ? "PLACING…" : `CONFIRM ${type}`}
               </button>
             </div>
           </motion.div>

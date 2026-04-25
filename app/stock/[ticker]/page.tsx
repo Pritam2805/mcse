@@ -96,6 +96,7 @@ export default function StockDetailPage({
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"ORDER" | "BOOK" | "HISTORY">("ORDER");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
   const [sectionTab, setSectionTab] = useState<"OVERVIEW" | "NEWS" | "COMPANY">("OVERVIEW");
   const [tickerCopied, setTickerCopied] = useState(false);
   const [chartType, setChartType] = useState<"LINE" | "CANDLE">("LINE");
@@ -177,20 +178,27 @@ export default function StockDetailPage({
 
   const executeOrder = useCallback(async () => {
     if (!stock) return;
-    const result = await placeOrder({
-      ticker: stock.ticker,
-      name: stock.name,
-      type: buySellTab,
-      orderType,
-      pricingType,
-      qty,
-      price: displayPrice,
-      ...(pricingType === "LIMIT" && limitPrice ? { limitPrice: parseFloat(limitPrice) } : {}),
-    });
-    setOrderMsg({ text: result.message, success: result.success });
-    if (result.success) { setQty(1); setLimitPrice(""); }
-    setTimeout(() => setOrderMsg(null), 3000);
-  }, [stock, placeOrder, buySellTab, orderType, pricingType, limitPrice, qty, displayPrice]);
+    // Guard against double-submit (prevents the 2x charge bug).
+    if (submittingOrder) return;
+    setSubmittingOrder(true);
+    try {
+      const result = await placeOrder({
+        ticker: stock.ticker,
+        name: stock.name,
+        type: buySellTab,
+        orderType,
+        pricingType,
+        qty,
+        price: displayPrice,
+        ...(pricingType === "LIMIT" && limitPrice ? { limitPrice: parseFloat(limitPrice) } : {}),
+      });
+      setOrderMsg({ text: result.message, success: result.success });
+      if (result.success) { setQty(1); setLimitPrice(""); }
+      setTimeout(() => setOrderMsg(null), 3000);
+    } finally {
+      setSubmittingOrder(false);
+    }
+  }, [stock, placeOrder, buySellTab, orderType, pricingType, limitPrice, qty, displayPrice, submittingOrder]);
 
   const handleOrder = useCallback(() => {
     if (confirmOrders) {

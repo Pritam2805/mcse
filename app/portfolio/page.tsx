@@ -57,6 +57,7 @@ function PortfolioInner() {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [orderMsg, setOrderMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
   const [intradayPositions, setIntradayPositions] = useState<IntradayPosition[]>([]);
   const [loadingIntraday, setLoadingIntraday] = useState(true);
   const [portfolio, setPortfolio] = useState<PortfolioHolding[]>([]);
@@ -158,19 +159,26 @@ function PortfolioInner() {
 
   async function executeOrder() {
     if (!selectedStock) return;
-    const result = await placeOrder({
-      ticker: selectedStock.ticker,
-      name: selectedStock.name,
-      type: buySellTab,
-      orderType,
-      qty,
-      price: selectedLivePrice,
-      pricingType,
-      ...(pricingType === "LIMIT" && limitPrice ? { limitPrice: parseFloat(limitPrice) } : {}),
-    });
-    setOrderMsg({ ok: result.success, text: result.message });
-    if (result.success) { setQty(1); setLimitPrice(""); }
-    setTimeout(() => setOrderMsg(null), 3000);
+    // Guard against double-submit (prevents the 2x charge bug).
+    if (submittingOrder) return;
+    setSubmittingOrder(true);
+    try {
+      const result = await placeOrder({
+        ticker: selectedStock.ticker,
+        name: selectedStock.name,
+        type: buySellTab,
+        orderType,
+        qty,
+        price: selectedLivePrice,
+        pricingType,
+        ...(pricingType === "LIMIT" && limitPrice ? { limitPrice: parseFloat(limitPrice) } : {}),
+      });
+      setOrderMsg({ ok: result.success, text: result.message });
+      if (result.success) { setQty(1); setLimitPrice(""); }
+      setTimeout(() => setOrderMsg(null), 3000);
+    } finally {
+      setSubmittingOrder(false);
+    }
   }
 
   function handleOrder() {
