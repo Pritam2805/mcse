@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
   const ip = clientIp(req);
   const convex = convexServerClient();
 
-  // Rate limit before hitting the upstream — protects both us and mu-aeon.
+  // Rate limit before any upstream call — protects both us and mu-aeon.
   const rate = await convex.query(api.auth.rateLimitCheck, { emailLower, ip });
   if (!rate.allowed) {
     return NextResponse.json(
@@ -158,43 +158,81 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate against mu-aeon.
-  const validation = await validateWithAeon(email, password);
-  if (!validation.ok) {
-    await convex.mutation(api.auth.recordLoginAttempt, {
-      emailLower,
-      ip,
-      succeeded: false,
-    });
-    if (validation.status === 401) {
+  // ── Domain-routed dispatch ──────────────────────────────────────────────
+  // @mcse.in        → internal Convex accounts (admin + 19 company CEOs)
+  // anything else   → mu-aeon (the 193 student accounts)
+  // No fallback between them — clean separation, zero overhead for students.
+  const domain = emailLower.split("@")[1] ?? "";
+  const isInternal = domain === "mcse.in";
+
+  let role: string;
+
+  if (isInternal) {
+    // Hash provided password and look up in internalAccounts.
+    const pepper = process.env.AUTH_PEPPER || "";
+    if (!pepper) {
+      console.error("AUTH_PEPPER not set on Vercel");
+      return NextResponse.json({ error: "Login failed" }, { status: 500 });
+    }
+    const providedHash = createHash("sha256")
+      .update(password + pepper)
+      .digest("hex");
+    const account = await convex.query(
+      api.internalAccounts.validateLoginByHash,
+      { emailLower, providedHash },
+    );
+    if (!account) {
+      await convex.mutation(api.auth.recordLoginAttempt, {
+        emailLower,
+        ip,
+        succeeded: false,
+      });
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 },
       );
     }
-    console.error("Aeon validation failed:", validation.reason);
-    return NextResponse.json(
-      { error: "Auth provider unreachable. Please try again." },
-      { status: 502 },
-    );
-  }
-
-  // Aeon said yes — resolve role.
-  // 1) Check Convex roleAssignments table (admin can edit live, no redeploy)
-  // 2) Fall back to env-var allowlists / local-part convention
-  let role: string;
-  try {
-    const assigned = await convex.query(api.auth.getRoleForEmail, { emailLower });
-    if (assigned?.role === "admin") {
-      role = "admin";
-    } else if (assigned?.role === "company" && assigned.ticker) {
-      role = `company:${assigned.ticker}`;
-    } else {
+    role =
+      account.role === "company" && account.ticker
+        ? `company:${account.ticker}`
+        : account.role;
+  } else {
+    // mu-aeon path (unchanged from before)
+    const validation = await validateWithAeon(email, password);
+    if (!validation.ok) {
+      await convex.mutation(api.auth.recordLoginAttempt, {
+        emailLower,
+        ip,
+        succeeded: false,
+      });
+      if (validation.status === 401) {
+        return NextResponse.json(
+          { error: "Invalid email or password" },
+          { status: 401 },
+        );
+      }
+      console.error("Aeon validation failed:", validation.reason);
+      return NextResponse.json(
+        { error: "Auth provider unreachable. Please try again." },
+        { status: 502 },
+      );
+    }
+    // mu-aeon validated — resolve role via Convex roleAssignments → env → prefix
+    try {
+      const assigned = await convex.query(api.auth.getRoleForEmail, {
+        emailLower,
+      });
+      if (assigned?.role === "admin") {
+        role = "admin";
+      } else if (assigned?.role === "company" && assigned.ticker) {
+        role = `company:${assigned.ticker}`;
+      } else {
+        role = deriveRoleFromEmail(email);
+      }
+    } catch (err) {
+      console.error("roleAssignments lookup failed; falling back:", err);
       role = deriveRoleFromEmail(email);
     }
-  } catch (err) {
-    console.error("roleAssignments lookup failed; falling back:", err);
-    role = deriveRoleFromEmail(email);
   }
 
   const name = email.split("@")[0];

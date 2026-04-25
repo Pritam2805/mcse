@@ -45,6 +45,22 @@ export default defineSchema({
     note: v.optional(v.string()),      // free-form (CEO name, etc.)
   }).index("by_email", ["emailLower"]),
 
+  // ── Internal accounts (admin + 19 company CEOs) ─────────────────────────
+  // These accounts are owned by US, not mu-aeon. Login route checks this
+  // table FIRST; if email matches and password hash matches, mu-aeon is
+  // bypassed entirely. If no match, falls through to the mu-aeon flow
+  // (which is what the 193 student accounts use).
+  //
+  // Password hashing: SHA-256 of (password + AUTH_PEPPER env var). The
+  // pepper must be set identically in both Convex and Vercel env.
+  internalAccounts: defineTable({
+    emailLower: v.string(),
+    passwordHash: v.string(),
+    role: v.string(),                  // "admin" | "company"
+    ticker: v.optional(v.string()),    // required when role = "company"
+    displayName: v.optional(v.string()),
+  }).index("by_email", ["emailLower"]),
+
   // ── Market Entities ─────────────────────────────────────────────────────
   holdingCompanies: defineTable({
     slug: v.string(),
