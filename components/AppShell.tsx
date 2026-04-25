@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import LoadingScreen from "./LoadingScreen";
 import TopNav from "./TopNav";
@@ -8,18 +8,20 @@ import TickerTape from "./TickerTape";
 import AnnouncementBanner from "./AnnouncementBanner";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("mcse-booted")) {
-      return false;
+  // Always start `loading=true` so server HTML matches the first client render
+  // (avoids hydration mismatch). Then skip the splash on the client if we've
+  // already booted this session.
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (sessionStorage.getItem("mcse-booted")) {
+      setLoading(false);
     }
-    return true;
-  });
+  }, []);
 
   const handleDone = useCallback(() => {
     setLoading(false);
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("mcse-booted", "1");
-    }
+    sessionStorage.setItem("mcse-booted", "1");
   }, []);
 
   return (

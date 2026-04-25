@@ -11,14 +11,8 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 const USE_MOCK = !API_BASE; // Fall back to mock when no API URL configured
 
-// ─── Token Injection ────────────────────────────────────────────────────────────
-// Call registerTokenGetter once on app boot (e.g. in AuthContext) to wire
-// Clerk's getToken() into every API request automatically.
-
-let _tokenGetter: (() => Promise<string | null>) | null = null;
-export function registerTokenGetter(fn: () => Promise<string | null>): void {
-  _tokenGetter = fn;
-}
+// Auth is cookie-based (httpOnly) — every fetch below uses `credentials: "include"`,
+// so the session cookie travels automatically. No bearer-token plumbing needed.
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -363,13 +357,12 @@ async function apiFetch<T, Raw = T>(
   }
 
   try {
-    const token = _tokenGetter ? await _tokenGetter() : null;
     const res = await fetch(`${API_BASE}${endpoint}`, {
+      credentials: "include",
       ...options,
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
-        ...(token ? { "Authorization": `Bearer ${token}` } : {}),
       },
     });
 

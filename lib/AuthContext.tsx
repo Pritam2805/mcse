@@ -1,8 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
-import { useAuth as useClerkAuth, useUser, useClerk } from "@clerk/nextjs";
-import { registerTokenGetter } from "@/lib/api";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 
 export type UserRole = "user" | "company" | "admin";
 
@@ -11,8 +10,9 @@ interface AuthState {
   role: UserRole | null;
   userName: string | null;
   userEmail: string | null;
-  login: () => void;
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -20,56 +20,95 @@ const AuthContext = createContext<AuthState>({
   role: null,
   userName: null,
   userEmail: null,
-  login: () => {},
-  logout: () => {},
+  loading: true,
+  login: async () => ({ ok: false, error: "AuthProvider not mounted" }),
+  logout: async () => {},
 });
 
-function deriveRole(raw: unknown): UserRole | null {
-  if (typeof raw !== "string") return null;
-  if (raw === "admin") return "admin";
-  if (raw.startsWith("company:")) return "company";
-  if (raw === "investor" || raw === "user") return "user";
-  return null;
+function nameFromEmail(email: string | null): string | null {
+  if (!email) return null;
+  const local = email.split("@")[0] ?? "";
+  if (!local) return email;
+  return local
+    .replace(/[._-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { isSignedIn, getToken } = useClerkAuth();
-  const { user } = useUser();
-  const { signOut } = useClerk();
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Register Clerk's getToken with the API client so every request gets a Bearer token
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" });
+      const data = await res.json();
+      setEmail(data?.authenticated && typeof data.email === "string" ? data.email : null);
+    } catch {
+      setEmail(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Hydrate from cookie on mount and whenever the tab regains focus,
+  // so reload / multi-tab logout stays in sync.
   useEffect(() => {
-    registerTokenGetter(() => getToken());
-  }, [getToken]);
+    refresh();
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
 
-  const rawRole = user?.publicMetadata?.role;
-  const role = deriveRole(rawRole);
-  const userName = user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || user.username || null : null;
-  const userEmail = user?.primaryEmailAddress?.emailAddress ?? null;
-
-  const login = () => {
-    window.location.href = process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL ?? "/sign-in";
-  };
-
-  const logout = () => {
-    signOut({ redirectUrl: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL });
-  };
-
-  const value = useMemo(() => ({
-    isLoggedIn: isSignedIn ?? false,
-    role,
-    userName,
-    userEmail,
-    login,
-    logout,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [isSignedIn, role, userName, userEmail]);
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+  const login = useCallback(
+    async (emailInput: string, password: string) => {
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailInput, password }),
+          credentials: "same-origin",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.ok) {
+          return { ok: false as const, error: typeof data?.error === "string" ? data.error : "Login failed" };
+        }
+        setEmail(typeof data.email === "string" ? data.email : emailInput.toLowerCase());
+        return { ok: true as const };
+      } catch {
+        return { ok: false as const, error: "Network error" };
+      }
+    },
+    [],
   );
+
+  const logout = useCallback(async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    } catch {
+      // ignore — clear local state regardless
+    }
+    setEmail(null);
+    router.push("/login");
+  }, [router]);
+
+  const value = useMemo<AuthState>(
+    () => ({
+      isLoggedIn: email !== null,
+      role: null,
+      userName: nameFromEmail(email),
+      userEmail: email,
+      loading,
+      login,
+      logout,
+    }),
+    [email, loading, login, logout],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# clerk (legacy artifact, no longer used)
+/.clerk
+
 # typescript
 *.tsbuildinfo
 

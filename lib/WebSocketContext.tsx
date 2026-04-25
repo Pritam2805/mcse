@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { useAuth } from "@clerk/nextjs";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,7 +106,6 @@ const mockTickers: Record<string, () => MarketTickData> = {
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
-  const { getToken } = useAuth();
   const [status, setStatus] = useState<WebSocketStatus>("disconnected");
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null);
   const [marketTicks, setMarketTicks] = useState<Record<string, MarketTickData>>({});
