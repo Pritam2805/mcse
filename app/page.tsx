@@ -8,13 +8,22 @@ import { motion } from "framer-motion";
 import Sparkline from "@/components/Sparkline";
 import { useAuth } from "@/lib/AuthContext";
 import {
-  indices,
   productsAndTools,
   formatRelativeTime,
   parentCompanies,
 } from "@/lib/mockData";
 import { getMarketStatus, getScreener, getNews, type MarketStatus, type ScreenerItem, type NewsItem } from "@/lib/api";
 import { usePoll } from "@/lib/usePoll";
+
+interface LiveIndex {
+  slug: string;
+  name: string;
+  value: number;
+  changePercent: number;
+  constituentCount: number;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 const PHASE_LABEL: Record<MarketStatus["phase"], string> = {
   IDLE: "COMING SOON",
@@ -88,11 +97,17 @@ export default function ExplorePage() {
 
   const [screenerData, setScreenerData] = useState<ScreenerItem[]>([]);
   const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+  const [indices, setIndices] = useState<LiveIndex[]>([]);
 
   usePoll(async () => {
-    const [sRes, nRes] = await Promise.all([getScreener(), getNews({ limit: 5 })]);
+    const [sRes, nRes, iRes] = await Promise.all([
+      getScreener(),
+      getNews({ limit: 5 }),
+      API_BASE ? fetch(`${API_BASE}/market/indices`).then((r) => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+    ]);
     if (sRes.data && sRes.data.length > 0) setScreenerData(sRes.data);
     if (nRes.data && nRes.data.length > 0) setLiveNews(nRes.data);
+    if (Array.isArray(iRes)) setIndices(iRes as LiveIndex[]);
   }, 5000);
 
   const screenerMap = useMemo(
@@ -410,39 +425,41 @@ export default function ExplorePage() {
             </Link>
           </motion.div>
 
-          {/* MARKET INDICES (stays in middle) */}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.08, ease: [0.25, 0.1, 0.25, 1] }}
-            className="mb-8 md:mb-10"
-          >
-            <Link href="/markets" className="flex items-center justify-between mb-5 group">
-              <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
-                MARKET INDICES
-              </h2>
-              <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
-            </Link>
-            <div className="grid grid-cols-2 gap-[1px] bg-white/8">
-              {indices.slice(0, 4).map((idx) => (
-                <div
-                  key={idx.name}
-                  className="bg-bg p-4 hover:bg-white/[0.03] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] tracking-[0.1em] text-white/50">{idx.name}</p>
-                    <Sparkline data={idx.sparkline} width={40} height={14} positive={idx.changePercent >= 0} />
+          {/* MARKET INDICES — live aggregates from current stock prices */}
+          {indices.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.08, ease: [0.25, 0.1, 0.25, 1] }}
+              className="mb-8 md:mb-10"
+            >
+              <Link href="/markets" className="flex items-center justify-between mb-5 group">
+                <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
+                  MARKET INDICES
+                </h2>
+                <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
+              </Link>
+              <div className="grid grid-cols-2 gap-[1px] bg-white/8">
+                {indices.slice(0, 4).map((idx) => (
+                  <div
+                    key={idx.slug}
+                    className="bg-bg p-4 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[10px] tracking-[0.1em] text-white/50">{idx.name}</p>
+                      <span className="text-[9px] text-white/30">{idx.constituentCount}</span>
+                    </div>
+                    <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
+                      {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
+                      {idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%
+                    </p>
                   </div>
-                  <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
-                    {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                    {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%)
-                  </p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           {/* TOP MOVERS TODAY (swapped down from above) */}
           <motion.div

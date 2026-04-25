@@ -13,7 +13,9 @@ import { useTrading } from "@/lib/TradingContext";
 import { usePreferences } from "@/lib/PreferencesContext";
 import { useWebSocket } from "@/lib/WebSocketContext";
 import { getIntradayPositions, getPortfolio, type IntradayPosition, type PortfolioHolding } from "@/lib/api";
-import { stockDirectory, type StockInfo } from "@/lib/mockData";
+// Lightweight shape used by the order side-panel — derived from the live
+// holding row, not from the static mockData stockDirectory.
+type SelectedStockInfo = { ticker: string; name: string; price: number };
 import { usePoll } from "@/lib/usePoll";
 
 type SortKey = "ticker" | "currentPrice" | "returnsPercent" | "currentValue";
@@ -150,11 +152,14 @@ function PortfolioInner() {
   const displayBalance = apiBalance ?? balance;
   const recentTxns = transactions.filter(t => t.type === "BUY" || t.type === "SELL").slice(0, 5);
 
-  const selectedStock = selectedTicker ? stockDirectory[selectedTicker] : null;
+  // Use the live holding row for the selected ticker — never the static
+  // stockDirectory mock (which would show stale seed prices).
   const selectedHolding = selectedTicker ? holdings.find(h => h.ticker === selectedTicker) : null;
-  // Order panel should also react to live ticks for the selected ticker
+  const selectedStock = selectedHolding
+    ? { ticker: selectedHolding.ticker, name: selectedHolding.name, price: selectedHolding.currentPrice }
+    : null;
   const selectedLivePrice = selectedTicker
-    ? (marketTicks[selectedTicker]?.price ?? selectedStock?.price ?? 0)
+    ? (marketTicks[selectedTicker]?.price ?? selectedHolding?.currentPrice ?? 0)
     : 0;
 
   const effectivePrice = pricingType === "LIMIT" && limitPrice ? parseFloat(limitPrice) : selectedLivePrice;
@@ -330,7 +335,7 @@ type HoldingsViewProps = {
   setMobileDisplay: React.Dispatch<React.SetStateAction<"market" | "current" | "returns" | "dayChange">>;
   selectedTicker: string | null; setSelectedTicker: (s: string | null) => void;
   setQty: (n: number) => void; setOrderMsg: (m: { ok: boolean; text: string } | null) => void;
-  selectedStock: StockInfo | null;
+  selectedStock: SelectedStockInfo | null;
   selectedHolding: Holding | null | undefined;
   selectedLivePrice: number;
   buySellTab: "BUY" | "SELL"; setBuySellTab: (t: "BUY" | "SELL") => void;

@@ -166,6 +166,71 @@ export const listStocks = query({
   },
 });
 
+/**
+ * Live market indices — aggregates real stock prices into sector/total
+ * indices. Replaces the static mock indices that were causing display
+ * flicker on /markets and the IndexBar.
+ *
+ * Returns a small array; one row per index. Each value is the market-cap-
+ * weighted average of constituent stocks' (currentPrice / openPrice * 1000).
+ * The 1000 base means an index of "1000.00" = unchanged from open.
+ */
+export const listIndices = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      slug: v.string(),
+      name: v.string(),
+      value: v.number(),
+      changePercent: v.number(),
+      constituentCount: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const stocks = (await ctx.db.query("stocks").collect()).filter(
+      (s) => s.isListed,
+    );
+
+    function aggregate(slug: string, name: string, members: typeof stocks) {
+      if (members.length === 0) {
+        return { slug, name, value: 1000, changePercent: 0, constituentCount: 0 };
+      }
+      let totalCap = 0;
+      let totalWeightedRatio = 0;
+      for (const s of members) {
+        const cap = s.marketCap || s.currentPrice * s.sharesOutstanding || 1;
+        const ratio = s.openPrice > 0 ? s.currentPrice / s.openPrice : 1;
+        totalCap += cap;
+        totalWeightedRatio += ratio * cap;
+      }
+      const avgRatio = totalCap > 0 ? totalWeightedRatio / totalCap : 1;
+      return {
+        slug,
+        name,
+        value: +(avgRatio * 1000).toFixed(2),
+        changePercent: +((avgRatio - 1) * 100).toFixed(2),
+        constituentCount: members.length,
+      };
+    }
+
+    const bySector: Record<string, typeof stocks> = {};
+    for (const s of stocks) {
+      (bySector[s.sector] ||= []).push(s);
+    }
+
+    return [
+      aggregate("mcse", "MCSE 50", stocks),
+      ...Object.entries(bySector).map(([sector, members]) =>
+        aggregate(
+          sector.toLowerCase().replace(/\s+/g, "-"),
+          sector.toUpperCase(),
+          members,
+        ),
+      ),
+    ];
+  },
+});
+
 export const listStocksByHolding = query({
   args: { holdingTicker: v.string() },
   returns: v.array(stockResult),

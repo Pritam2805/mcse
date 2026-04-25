@@ -4,21 +4,15 @@ import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from "reac
 import { Search, ArrowLeft, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { stockDirectory } from "@/lib/mockData";
-import Sparkline from "@/components/Sparkline";
 import Portal from "@/components/Portal";
-import {
-  SEARCH_FILTERS,
-  type SearchFilter,
-  computeResults,
-  sectionCaption,
-  ResultRow,
-  resultKey,
-} from "@/components/searchResults";
+import { getScreener, type ScreenerItem } from "@/lib/api";
 
-const allStocks = Object.values(stockDirectory);
-const trendingTickers = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ITC"];
-const trending = trendingTickers.map(t => stockDirectory[t]).filter(Boolean);
+interface LiveStock {
+  ticker: string;
+  name: string;
+  price: number;
+  changePercent: number;
+}
 
 function subscribeMQ(callback: () => void) {
   if (typeof window === "undefined") return () => {};
@@ -52,17 +46,35 @@ export default function SearchModal({
 }) {
   const isMobile = useIsMobile();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<SearchFilter>("ALL");
   const [prevOpen, setPrevOpen] = useState(open);
+  const [stocks, setStocks] = useState<LiveStock[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (open) {
-      setQuery("");
-      setFilter("ALL");
-    }
+    if (open) setQuery("");
   }
+
+  // Load live stocks when modal opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function load() {
+      const res = await getScreener();
+      if (cancelled || !res.data) return;
+      const live: LiveStock[] = res.data.map((s: ScreenerItem) => ({
+        ticker: s.ticker,
+        name: s.name,
+        price: s.price,
+        changePercent: s.change_pct,
+      }));
+      setStocks(live);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (open && isMobile) {
@@ -72,7 +84,23 @@ export default function SearchModal({
   }, [open, isMobile]);
 
   const debouncedQuery = useDebouncedValue(query, 150);
-  const results = useMemo(() => computeResults(debouncedQuery, filter), [debouncedQuery, filter]);
+
+  const results = useMemo(() => {
+    const q = debouncedQuery.trim().toLowerCase();
+    if (!q) return [];
+    return stocks.filter(
+      (s) =>
+        s.ticker.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q),
+    );
+  }, [debouncedQuery, stocks]);
+
+  // Top movers as "trending" — simply the biggest absolute movers.
+  const trending = useMemo(() => {
+    return [...stocks]
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
+      .slice(0, 5);
+  }, [stocks]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -83,8 +111,6 @@ export default function SearchModal({
   }, [open, onClose]);
 
   const hasQuery = query.trim().length > 0;
-  const showResults = hasQuery || filter !== "ALL";
-  const caption = sectionCaption(filter, hasQuery);
 
   if (!isMobile) return null;
 
@@ -117,93 +143,33 @@ export default function SearchModal({
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search stocks, news…"
+                placeholder="Search stocks…"
                 className="flex-1 bg-transparent text-white outline-none placeholder:text-white/25"
                 style={{ fontSize: '16px' }}
               />
             </div>
           </div>
 
-          {/* Filter chips */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/8 shrink-0 overflow-x-auto scrollbar-hide">
-            {SEARCH_FILTERS.map((chip) => {
-              const active = filter === chip;
-              return (
-                <button
-                  key={chip}
-                  onClick={() => setFilter(chip)}
-                  className={`px-4 py-2.5 text-[10px] tracking-[0.12em] font-medium border whitespace-nowrap transition-colors duration-200 ${
-                    active
-                      ? "bg-white text-black border-white"
-                      : "text-white/50 border-white/15 active:bg-white/10"
-                  }`}
-                >
-                  {chip}
-                </button>
-              );
-            })}
-          </div>
-
           {/* Content area */}
           <div className="flex-1 overflow-y-auto">
-            {!showResults ? (
-              /* Trending section (no query, ALL filter) */
+            {!hasQuery ? (
               <div className="px-4 py-5">
                 <div className="flex items-center gap-2 mb-4">
                   <TrendingUp size={14} className="text-white/30" />
-                  <p className="text-[10px] tracking-[0.15em] text-white/30 font-medium">TRENDING</p>
+                  <p className="text-[10px] tracking-[0.15em] text-white/30 font-medium">TOP MOVERS</p>
                 </div>
                 <div className="space-y-1">
-                  {trending.map((s) => (
-                    <Link
-                      key={s.ticker}
-                      href={`/stock/${s.ticker}`}
-                      onClick={onClose}
-                      className="flex items-center gap-4 py-3 px-1 border-b border-white/6 active:bg-white/[0.04] transition-colors"
-                    >
-                      <div className="w-10 h-10 border border-white/15 flex items-center justify-center shrink-0">
-                        <span className="text-[9px] tracking-[0.1em] text-white/40">{s.ticker.slice(0, 3)}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em]">{s.ticker}</p>
-                        <p className="text-[10px] text-white/30 truncate">{s.name}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-[var(--font-anton)] text-[13px]">{"\u20B9"}{s.price.toLocaleString("en-IN")}</p>
-                        <p className={`text-[10px] font-medium ${s.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                          {s.changePercent >= 0 ? "+" : ""}{s.changePercent.toFixed(2)}%
-                        </p>
-                      </div>
-                    </Link>
+                  {trending.length === 0 ? (
+                    <p className="text-[11px] text-white/25 py-4">Loading…</p>
+                  ) : trending.map((s) => (
+                    <SearchRow key={s.ticker} stock={s} onClose={onClose} />
                   ))}
                 </div>
 
                 <p className="text-[10px] tracking-[0.15em] text-white/30 font-medium mt-8 mb-4">ALL STOCKS</p>
                 <div className="space-y-1">
-                  {allStocks.slice(0, 15).map((s) => (
-                    <Link
-                      key={s.ticker}
-                      href={`/stock/${s.ticker}`}
-                      onClick={onClose}
-                      className="flex items-center gap-4 py-3 px-1 border-b border-white/6 active:bg-white/[0.04] transition-colors"
-                    >
-                      <div className="w-10 h-10 border border-white/15 flex items-center justify-center shrink-0">
-                        <span className="text-[9px] tracking-[0.1em] text-white/40">{s.ticker.slice(0, 3)}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em]">{s.ticker}</p>
-                        <p className="text-[10px] text-white/30 truncate">{s.name}</p>
-                      </div>
-                      <div className="shrink-0 mr-2">
-                        <Sparkline data={s.chartData["1D"].map((d) => d.price)} width={50} height={18} positive={s.changePercent >= 0} />
-                      </div>
-                      <div className="text-right shrink-0 min-w-[70px]">
-                        <p className="font-[var(--font-anton)] text-[13px]">{"\u20B9"}{s.price.toLocaleString("en-IN")}</p>
-                        <p className={`text-[10px] font-medium ${s.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                          {s.changePercent >= 0 ? "+" : ""}{s.changePercent.toFixed(2)}%
-                        </p>
-                      </div>
-                    </Link>
+                  {stocks.slice(0, 30).map((s) => (
+                    <SearchRow key={s.ticker} stock={s} onClose={onClose} />
                   ))}
                 </div>
               </div>
@@ -213,16 +179,11 @@ export default function SearchModal({
                 <p className="text-[10px] text-white/15 mt-1">Try a different search term</p>
               </div>
             ) : (
-              <div className="space-y-0">
-                {caption && (
-                  <p className="text-[10px] tracking-[0.15em] text-white/30 font-medium px-4 pt-4 pb-2">
-                    {caption}
-                  </p>
-                )}
-                {results.map((r) => (
-                  <ResultRow key={resultKey(r)} result={r} onNavigate={onClose} />
+              <div className="space-y-1 px-4 pt-4">
+                {results.map((s) => (
+                  <SearchRow key={s.ticker} stock={s} onClose={onClose} />
                 ))}
-                <div className="px-5 py-3 text-center">
+                <div className="px-1 py-3 text-center">
                   <span className="text-[9px] text-white/20 tracking-[0.1em]">
                     {results.length} RESULT{results.length !== 1 ? "S" : ""}
                   </span>
@@ -234,5 +195,29 @@ export default function SearchModal({
       )}
     </AnimatePresence>
     </Portal>
+  );
+}
+
+function SearchRow({ stock: s, onClose }: { stock: LiveStock; onClose: () => void }) {
+  return (
+    <Link
+      href={`/stock/${s.ticker}`}
+      onClick={onClose}
+      className="flex items-center gap-4 py-3 px-1 border-b border-white/6 active:bg-white/[0.04] transition-colors"
+    >
+      <div className="w-10 h-10 border border-white/15 flex items-center justify-center shrink-0">
+        <span className="text-[9px] tracking-[0.1em] text-white/40">{s.ticker.slice(0, 3)}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em]">{s.ticker}</p>
+        <p className="text-[10px] text-white/30 truncate">{s.name}</p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className="font-[var(--font-anton)] text-[13px]">{"₹"}{s.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+        <p className={`text-[10px] font-medium ${s.changePercent >= 0 ? "text-up" : "text-down"}`}>
+          {s.changePercent >= 0 ? "+" : ""}{s.changePercent.toFixed(2)}%
+        </p>
+      </div>
+    </Link>
   );
 }

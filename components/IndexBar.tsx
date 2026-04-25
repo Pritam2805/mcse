@@ -1,10 +1,45 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { indices } from "@/lib/mockData";
+
+interface LiveIndex {
+  slug: string;
+  name: string;
+  value: number;
+  changePercent: number;
+  constituentCount: number;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 export default function IndexBar() {
+  const [indices, setIndices] = useState<LiveIndex[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!API_BASE) return;
+      try {
+        const res = await fetch(`${API_BASE}/market/indices`);
+        if (!res.ok) return;
+        const data = (await res.json()) as LiveIndex[];
+        if (!cancelled) setIndices(data);
+      } catch {
+        /* ignore — bar stays hidden if no live data */
+      }
+    }
+    load();
+    const id = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (indices.length === 0) return null;
+
   return (
     <div className="w-full bg-bg border-b border-white/8 overflow-x-auto scrollbar-hide">
       <motion.div
@@ -14,7 +49,7 @@ export default function IndexBar() {
         className="flex items-center justify-center gap-6 md:gap-8 px-4 md:px-6 h-8 min-w-max"
       >
         {indices.map((idx, i) => (
-          <Link key={idx.name} href={`/index/${idx.slug}`}>
+          <Link key={idx.slug} href={`/index/${idx.slug}`}>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

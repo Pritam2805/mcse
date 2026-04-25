@@ -4,10 +4,18 @@ import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Activity, ArrowUpDown } from "lucide-react";
-import Sparkline from "@/components/Sparkline";
-import { indices } from "@/lib/mockData";
 import { getMarketBreadth, getScreener, type MarketBreadth, type ScreenerItem } from "@/lib/api";
 import { usePoll } from "@/lib/usePoll";
+
+interface LiveIndex {
+  slug: string;
+  name: string;
+  value: number;
+  changePercent: number;
+  constituentCount: number;
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 type SortKey = "ticker" | "price" | "change_pct" | "pe_ratio" | "volume" | "sector";
 type SortDir = "asc" | "desc";
@@ -31,12 +39,18 @@ export default function MarketsPage() {
   const [mobileValue, setMobileValue] = useState<MobileValueKey>("change_pct");
   const [marketBreadth, setMarketBreadth] = useState<MarketBreadth>(defaultBreadth);
   const [stocks, setStocks] = useState<ScreenerItem[]>([]);
+  const [indices, setIndices] = useState<LiveIndex[]>([]);
   const [loading, setLoading] = useState(true);
 
   usePoll(async () => {
-    const [bRes, sRes] = await Promise.all([getMarketBreadth(), getScreener()]);
+    const [bRes, sRes, iRes] = await Promise.all([
+      getMarketBreadth(),
+      getScreener(),
+      API_BASE ? fetch(`${API_BASE}/market/indices`).then((r) => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+    ]);
     if (bRes.data) setMarketBreadth(bRes.data);
     if (sRes.data) setStocks(sRes.data);
+    if (Array.isArray(iRes)) setIndices(iRes as LiveIndex[]);
     setLoading(false);
   }, 5000);
 
@@ -120,32 +134,35 @@ export default function MarketsPage() {
         </div>
       </div>
 
-      {/* Indices tiles (simulation constructs — static) */}
-      <section className="mb-8">
-        <div className="grid gap-[1px] bg-white/8 grid-cols-2 md:grid-cols-4">
-          {indices.map((idx, i) => (
-            <Link key={idx.name} href={`/index/${idx.slug}`}>
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="bg-bg p-4 hover:bg-white/[0.02] transition-colors cursor-pointer"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[8px] tracking-[0.15em] text-white/30 uppercase">{idx.name}</p>
-                  <Sparkline data={idx.sparkline} width={36} height={12} positive={idx.changePercent >= 0} />
-                </div>
-                <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
-                  {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </p>
-                <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                  {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%)
-                </p>
-              </motion.div>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* Indices tiles — computed live from current stock prices.
+          Hidden until at least one index is loaded. */}
+      {indices.length > 0 && (
+        <section className="mb-8">
+          <div className="grid gap-[1px] bg-white/8 grid-cols-2 md:grid-cols-4">
+            {indices.map((idx, i) => (
+              <Link key={idx.slug} href={`/index/${idx.slug}`}>
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                  className="bg-bg p-4 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[8px] tracking-[0.15em] text-white/30 uppercase">{idx.name}</p>
+                    <span className="text-[8px] text-white/30">{idx.constituentCount}</span>
+                  </div>
+                  <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
+                    {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
+                    {idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%
+                  </p>
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Market Breadth */}
       {totalBreadth > 0 && (
