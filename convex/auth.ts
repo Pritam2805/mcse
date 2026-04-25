@@ -9,17 +9,17 @@ const RATE_MAX_FAILURES = 5;
 export const rateLimitCheck = query({
   args: { emailLower: v.string(), ip: v.string() },
   returns: v.object({ allowed: v.boolean(), failures: v.number() }),
-  handler: async (ctx, { emailLower, ip }) => {
+  handler: async (ctx, { emailLower, ip: _ip }) => {
+    // Per-email rate limit only. The IP-based check was removed because all
+    // event participants share a single campus NAT IP — 5 failed attempts from
+    // any one student would otherwise lock out the rest. Per-email is enough
+    // to stop brute-force against a single account.
     const since = Date.now() - RATE_WINDOW_MS;
     const byEmail = await ctx.db
       .query("loginAttempts")
       .withIndex("by_email_at", (q) => q.eq("emailLower", emailLower).gte("at", since))
       .collect();
-    const byIp = await ctx.db
-      .query("loginAttempts")
-      .withIndex("by_ip_at", (q) => q.eq("ip", ip).gte("at", since))
-      .collect();
-    const failures = [...byEmail, ...byIp].filter((a) => !a.succeeded).length;
+    const failures = byEmail.filter((a) => !a.succeeded).length;
     return { allowed: failures < RATE_MAX_FAILURES, failures };
   },
 });
