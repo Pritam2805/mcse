@@ -47,15 +47,23 @@ function isOriginAllowed(req: NextRequest): boolean {
   }
 }
 
-// Allowlists for elevating real (mu-aeon-registered) emails to admin/company
-// roles. Set via Vercel env vars:
-//   ADMIN_EMAILS    = "you@mu.edu.in,other@mu.edu.in"
-//   COMPANY_EMAILS  = "alice@mu.edu.in:ENIGMA,bob@mu.edu.in:ACM"
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
-  .toLowerCase()
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+// Hardcoded admin allowlist + env-var override. Anyone whose email (lowercased)
+// is in either list gets admin role after mu-aeon validates them.
+//
+// To add another admin: append to HARDCODED_ADMIN_EMAILS below, commit, push.
+// (Or set the ADMIN_EMAILS env var on Vercel — both are unioned.)
+const HARDCODED_ADMIN_EMAILS = [
+  "se24ucam047@mahindrauniversity.edu.in",
+];
+
+const ADMIN_EMAILS = [
+  ...HARDCODED_ADMIN_EMAILS,
+  ...(process.env.ADMIN_EMAILS || "")
+    .toLowerCase()
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+].map((s) => s.toLowerCase());
 
 const COMPANY_EMAIL_MAP: Record<string, string> = (() => {
   const raw = process.env.COMPANY_EMAILS || "";
