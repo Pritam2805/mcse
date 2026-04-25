@@ -3,11 +3,15 @@ import { convexServerClient } from "@/lib/convexServer";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { createHash } from "node:crypto";
+import { requireAdmin } from "@/lib/serverAuth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const guard = await requireAdmin(req);
+  if (guard) return guard;
+
   const { id } = await params;
   const authHeader = req.headers.get("authorization") ?? "";
   const match = authHeader.match(/^Bearer\s+(.+)$/i);

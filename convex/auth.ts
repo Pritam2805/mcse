@@ -68,6 +68,7 @@ export const provisionSession = mutation({
     teamName: v.optional(v.string()),
     tokenHash: v.string(),
     expiresAt: v.number(),
+    role: v.optional(v.string()),
   },
   returns: v.object({
     investorId: v.id("investors"),
@@ -102,6 +103,7 @@ export const provisionSession = mutation({
     const sessionId = await ctx.db.insert("sessions", {
       tokenHash: args.tokenHash,
       investorId: investor._id,
+      role: args.role,
       expiresAt: args.expiresAt,
       createdAt: Date.now(),
     });
@@ -113,6 +115,25 @@ export const provisionSession = mutation({
       name: investor.name,
       email: investor.email,
     };
+  },
+});
+
+/**
+ * Returns the role of the session's owner. Used by server-side guards on
+ * /api/admin/* and /api/company/* endpoints. Returns null for missing or
+ * expired sessions.
+ */
+export const getSessionRole = query({
+  args: { tokenHash: v.string() },
+  returns: v.union(v.null(), v.string()),
+  handler: async (ctx, { tokenHash }) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (!session) return null;
+    if (session.expiresAt < Date.now()) return null;
+    return session.role ?? "user";
   },
 });
 

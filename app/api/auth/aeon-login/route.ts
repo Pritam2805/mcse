@@ -257,6 +257,7 @@ export async function POST(req: NextRequest) {
       teamName: undefined,
       tokenHash,
       expiresAt,
+      role,  // ← role bound to session, server-checked by /api/admin/* guards
     });
 
     await convex.mutation(api.auth.recordLoginAttempt, {

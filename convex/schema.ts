@@ -17,6 +17,9 @@ export default defineSchema({
   sessions: defineTable({
     tokenHash: v.string(),
     investorId: v.id("investors"),
+    // Role is stored at session-issue time. Admin endpoints check this, not
+    // the localStorage role on the client (which is forgeable).
+    role: v.optional(v.string()),  // "admin" | "company:<TICKER>" | "user"
     expiresAt: v.number(),
     createdAt: v.number(),
   })

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { convexServerClient } from "@/lib/convexServer";
 import { api } from "@/convex/_generated/api";
+import { requireAdmin } from "@/lib/serverAuth";
 
 // Returns company-submitted + admin-injected news across all statuses
 // (PENDING / APPROVED / REJECTED) so the admin UI can filter-by-status.
 // Uses the unfiltered `listAllNews` query rather than `listNews` which
 // hides PENDING items from investors.
-export async function GET() {
+export async function GET(req: Request) {
+  const guard = await requireAdmin(req);
+  if (guard) return guard;
+
   const convex = convexServerClient();
   const items = await convex.query(api.news.listAllNews, { limit: 200 });
 
