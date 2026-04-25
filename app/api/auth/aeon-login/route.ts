@@ -179,8 +179,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Aeon said yes — provision a Convex session.
-  const role = deriveRoleFromEmail(email);
+  // Aeon said yes — resolve role.
+  // 1) Check Convex roleAssignments table (admin can edit live, no redeploy)
+  // 2) Fall back to env-var allowlists / local-part convention
+  let role: string;
+  try {
+    const assigned = await convex.query(api.auth.getRoleForEmail, { emailLower });
+    if (assigned?.role === "admin") {
+      role = "admin";
+    } else if (assigned?.role === "company" && assigned.ticker) {
+      role = `company:${assigned.ticker}`;
+    } else {
+      role = deriveRoleFromEmail(email);
+    }
+  } catch (err) {
+    console.error("roleAssignments lookup failed; falling back:", err);
+    role = deriveRoleFromEmail(email);
+  }
+
   const name = email.split("@")[0];
 
   try {

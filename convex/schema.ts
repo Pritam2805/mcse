@@ -32,6 +32,19 @@ export default defineSchema({
     .index("by_email_at", ["emailLower", "at"])
     .index("by_ip_at", ["ip", "at"]),
 
+  // ── Role allowlist ──────────────────────────────────────────────────────
+  // Promotes a real (mu-aeon-validated) email to admin or company role.
+  // Looked up at login time, before falling back to env vars / local-part
+  // conventions. Edit rows live in the Convex dashboard — no redeploy.
+  //   role = "admin"     → ticker is ignored
+  //   role = "company"   → ticker required (ENIGMA, ACM, etc.)
+  roleAssignments: defineTable({
+    emailLower: v.string(),
+    role: v.string(),                  // "admin" | "company"
+    ticker: v.optional(v.string()),    // required when role = "company"
+    note: v.optional(v.string()),      // free-form (CEO name, etc.)
+  }).index("by_email", ["emailLower"]),
+
   // ── Market Entities ─────────────────────────────────────────────────────
   holdingCompanies: defineTable({
     slug: v.string(),

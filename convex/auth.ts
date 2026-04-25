@@ -24,6 +24,28 @@ export const rateLimitCheck = query({
   },
 });
 
+// Look up a role assignment for an email (case-insensitive).
+// Returns null if the email is not in the allowlist — caller should fall back
+// to env vars / local-part convention / "user" default.
+export const getRoleForEmail = query({
+  args: { emailLower: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      role: v.string(),
+      ticker: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, { emailLower }) => {
+    const row = await ctx.db
+      .query("roleAssignments")
+      .withIndex("by_email", (q) => q.eq("emailLower", emailLower))
+      .first();
+    if (!row) return null;
+    return { role: row.role, ticker: row.ticker };
+  },
+});
+
 export const recordLoginAttempt = mutation({
   args: { emailLower: v.string(), ip: v.string(), succeeded: v.boolean() },
   returns: v.null(),
