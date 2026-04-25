@@ -47,12 +47,38 @@ function isOriginAllowed(req: NextRequest): boolean {
   }
 }
 
-// Map an email's local-part to a role.
-//   admin / admin-*           → "admin"
-//   co-<TICKER>               → "company:<TICKER>"
-//   anything else             → "user"
+// Allowlists for elevating real (mu-aeon-registered) emails to admin/company
+// roles. Set via Vercel env vars:
+//   ADMIN_EMAILS    = "you@mu.edu.in,other@mu.edu.in"
+//   COMPANY_EMAILS  = "alice@mu.edu.in:ENIGMA,bob@mu.edu.in:ACM"
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
+  .toLowerCase()
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const COMPANY_EMAIL_MAP: Record<string, string> = (() => {
+  const raw = process.env.COMPANY_EMAILS || "";
+  const out: Record<string, string> = {};
+  for (const pair of raw.split(",")) {
+    const [email, ticker] = pair.split(":").map((s) => s?.trim() || "");
+    if (email && ticker) out[email.toLowerCase()] = ticker.toUpperCase();
+  }
+  return out;
+})();
+
+// Resolve the role for a (validated) login.
+//   1. Email in ADMIN_EMAILS                  → "admin"
+//   2. Email in COMPANY_EMAIL_MAP             → "company:<TICKER>"
+//   3. Local-part is "admin" or "admin-*"     → "admin"   (legacy convention)
+//   4. Local-part starts with "co-"           → "company:<TICKER>" (legacy)
+//   5. otherwise                              → "user"
 function deriveRoleFromEmail(email: string): string {
-  const local = email.split("@")[0]?.toLowerCase() ?? "";
+  const lower = email.toLowerCase();
+  if (ADMIN_EMAILS.includes(lower)) return "admin";
+  if (COMPANY_EMAIL_MAP[lower]) return `company:${COMPANY_EMAIL_MAP[lower]}`;
+
+  const local = lower.split("@")[0] ?? "";
   if (local === "admin" || local.startsWith("admin-")) return "admin";
   if (local.startsWith("co-")) {
     const ticker = local.slice(3).toUpperCase();
