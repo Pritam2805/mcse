@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { useAuth as useClerkAuth, useUser, useClerk } from "@clerk/nextjs";
 import { bootstrapInvestor, registerTokenGetter } from "@/lib/api";
 import { getPreviewSession, previewLogin, previewLogout, type PreviewSession } from "@/lib/previewAuth";
+import { aeonLogin, aeonLogout, getAeonSession, type AeonSession } from "@/lib/aeonAuth";
 
 export type UserRole = "user" | "company" | "admin";
 
@@ -40,6 +41,7 @@ const defaultState: AuthState = {
 const AuthContext = createContext<AuthState>(defaultState);
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_AUTH_MODE === "preview";
+const IS_AEON = process.env.NEXT_PUBLIC_AUTH_MODE === "aeon";
 
 function deriveRole(raw: unknown): UserRole | null {
   if (typeof raw !== "string") return null;
@@ -168,9 +170,72 @@ function PreviewAuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// ─── Aeon-mode provider (Aeon event-auth → Convex session) ──────────────────
+
+function AeonAuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<AeonSession | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const bootstrappedRef = useRef(false);
+
+  useEffect(() => {
+    setSession(getAeonSession());
+    setAuthReady(true);
+  }, []);
+
+  useEffect(() => {
+    registerTokenGetter(async () => getAeonSession()?.token ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (!session || bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
+    bootstrapInvestor().catch(() => {
+      bootstrappedRef.current = false;
+    });
+  }, [session]);
+
+  const login = async (email?: string, password?: string): Promise<boolean> => {
+    setLoginError(null);
+    if (!email || !password) {
+      setLoginError("Enter email and password");
+      return false;
+    }
+    const result = await aeonLogin(email, password);
+    if (result.ok) {
+      setSession(result.session);
+      return true;
+    }
+    setLoginError(result.error);
+    return false;
+  };
+
+  const logout = async () => {
+    await aeonLogout();
+    setSession(null);
+    bootstrappedRef.current = false;
+  };
+
+  const role = deriveRole(session?.user.role);
+  const value: AuthState = {
+    isLoggedIn: !!session,
+    authReady,
+    role,
+    companyTicker: deriveCompanyTicker(session?.user.role),
+    userName: session?.user.name ?? null,
+    userEmail: session?.user.email ?? null,
+    login,
+    logout,
+    loginError,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
 // ─── Top-level switch ───────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  if (IS_AEON) return <AeonAuthProvider>{children}</AeonAuthProvider>;
   if (IS_PREVIEW) return <PreviewAuthProvider>{children}</PreviewAuthProvider>;
   return <ClerkAuthProvider>{children}</ClerkAuthProvider>;
 }
