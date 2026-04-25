@@ -18,7 +18,11 @@ const PREF_ITEMS: { key: keyof Preferences; label: string }[] = [
 ];
 
 export default function ProfileDropdown({ onClose }: { onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
+  // Two refs — mobile modal (rendered via Portal) + desktop dropdown.
+  // Both modals are in the DOM simultaneously, just hidden via Tailwind
+  // breakpoints, so the click-outside check must consider BOTH.
+  const mobileRef = useRef<HTMLDivElement>(null);
+  const desktopRef = useRef<HTMLDivElement>(null);
   const { logout, userName, userEmail, role } = useAuth();
   const { balance } = useTrading();
   const prefs = usePreferences();
@@ -27,19 +31,47 @@ export default function ProfileDropdown({ onClose }: { onClose: () => void }) {
   const initials = userName ? userName.split(" ").map(w => w[0]).join("").slice(0, 2) : "?";
 
   useEffect(() => {
+    // Defer attaching the listener by one tick so the same click that
+    // opened the dropdown doesn't immediately close it.
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      document.addEventListener("mousedown", handleClick);
+    }, 0);
+
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideMobile = mobileRef.current?.contains(target) ?? false;
+      const insideDesktop = desktopRef.current?.contains(target) ?? false;
+      if (!insideMobile && !insideDesktop) {
         onClose();
       }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, [onClose]);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    // Close the dropdown first so its exit animation starts before the
+    // auth state flips and TopNav re-renders to LOG IN.
     onClose();
-    router.push("/");
+
+    // Clear local + server session.
+    await logout();
+
+    // Hard navigate so ALL React state (TradingContext polls, cached
+    // portfolio, open websockets, etc.) resets cleanly. router.push()
+    // would leave stale intervals + queries running under the logged-out
+    // user and cause visible flicker.
+    if (typeof window !== "undefined") {
+      window.location.replace("/");
+    } else {
+      router.replace("/");
+    }
   }
 
   const menuItems = [
@@ -51,7 +83,7 @@ export default function ProfileDropdown({ onClose }: { onClose: () => void }) {
 
   const mobileModal = (
     <motion.div
-      ref={ref}
+      ref={mobileRef}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -164,6 +196,7 @@ export default function ProfileDropdown({ onClose }: { onClose: () => void }) {
 
       {/* Desktop: Compact dropdown */}
       <motion.div
+        ref={desktopRef}
         initial={{ opacity: 0, y: -8, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.97 }}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Activity, ArrowUpDown } from "lucide-react";
 import Sparkline from "@/components/Sparkline";
 import { indices } from "@/lib/mockData";
 import { getMarketBreadth, getScreener, type MarketBreadth, type ScreenerItem } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 
 type SortKey = "ticker" | "price" | "change_pct" | "pe_ratio" | "volume" | "sector";
 type SortDir = "asc" | "desc";
@@ -32,15 +33,12 @@ export default function MarketsPage() {
   const [stocks, setStocks] = useState<ScreenerItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    getMarketBreadth().then(res => {
-      if (res.data) setMarketBreadth(res.data);
-    });
-    getScreener().then(res => {
-      if (res.data) setStocks(res.data);
-      setLoading(false);
-    });
-  }, []);
+  usePoll(async () => {
+    const [bRes, sRes] = await Promise.all([getMarketBreadth(), getScreener()]);
+    if (bRes.data) setMarketBreadth(bRes.data);
+    if (sRes.data) setStocks(sRes.data);
+    setLoading(false);
+  }, 5000);
 
   const sectors = useMemo(() => {
     const s = new Set(stocks.map(st => st.sector));

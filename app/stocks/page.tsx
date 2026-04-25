@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { getStocks, type StockListItem } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 
 type SortKey = "ticker" | "price" | "sector";
 type SortDir = "asc" | "desc";
@@ -16,12 +17,11 @@ export default function StocksPage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [sectorFilter, setSectorFilter] = useState("ALL");
 
-  useEffect(() => {
-    getStocks().then(res => {
-      if (res.data && res.data.length > 0) setStocks(res.data);
-      setLoading(false);
-    });
-  }, []);
+  usePoll(async () => {
+    const res = await getStocks();
+    if (res.data && res.data.length > 0) setStocks(res.data);
+    setLoading(false);
+  }, 5000);
 
   const sectors = useMemo(() => {
     const s = new Set(stocks.map(st => st.sector));

@@ -117,7 +117,7 @@ export default function SearchModal({
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search stocks, IPOs, news…"
+                placeholder="Search stocks, news…"
                 className="flex-1 bg-transparent text-white outline-none placeholder:text-white/25"
                 style={{ fontSize: '16px' }}
               />

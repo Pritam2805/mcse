@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { useAuth } from "@clerk/nextjs";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -107,7 +106,6 @@ const mockTickers: Record<string, () => MarketTickData> = {
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
-  const { getToken } = useAuth();
   const [status, setStatus] = useState<WebSocketStatus>("disconnected");
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null);
   const [marketTicks, setMarketTicks] = useState<Record<string, MarketTickData>>({});
@@ -221,24 +219,6 @@ const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
             const notif = message as unknown as NotificationPush;
             setNotifications((prev) => [notif, ...prev.slice(0, 49)]);
             setUnreadCount((prev) => prev + 1);
-            break;
-          }
-
-          case "ETF_NAV_UPDATE": {
-            const updates = (message.etf_navs as { ticker: string; nav: number; market_price: number }[]) ?? [];
-            const newTicks: Record<string, MarketTickData> = {};
-            for (const e of updates) {
-              newTicks[e.ticker] = {
-                ticker:        e.ticker,
-                price:         e.market_price,
-                change:        0,
-                changePercent: 0,
-                volume:        0,
-                bid:           e.nav,
-                ask:           e.market_price,
-              };
-            }
-            setMarketTicks((prev) => ({ ...prev, ...newTicks }));
             break;
           }
 

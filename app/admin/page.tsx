@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useMemo } from "react";
+import { useQuery } from "convex/react";
+import { useLiveStocks } from "@/lib/useLiveStocks";
+import { useTokenHash } from "@/lib/clientAuth";
+import { api } from "@/convex/_generated/api";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -34,7 +38,7 @@ import { useAdmin } from "@/lib/AdminContext";
 import { useDayTick } from "@/lib/WebSocketContext";
 import { injectEvent, getPlatformMetrics, PlatformMetrics, getLedger, LedgerEntry, getInvestors, Investor, topupInvestor } from "@/lib/api";
 import {
-  enigmaCompanyData,
+  parentDirectory,
   stockDirectory,
   allStocksRaw,
 } from "@/lib/mockData";
@@ -431,20 +435,103 @@ function ScandalTrigger() {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Enigma Company Admin Dashboard
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-function EnigmaDashboard() {
-  const co = enigmaCompanyData;
-  const [activeSub, setActiveSub] = useState(co.subsidiaries[0]);
-  const sub = stockDirectory[activeSub];
-  const fund = sub.fundamentals;
-  const chartData = sub.chartData["3D"];
-  const { companyNews, companyEvents } = useAdmin();
+// Company Admin Dashboard
+//   - Dynamic: reads `companyTicker` from auth, finds the holding's subsidiaries
+//     in mockData (static metadata) and overlays live prices via useLiveStocks.
+//   - Reactive: news pulled from Convex via useQuery(listMyNews) — refreshes
+//     instantly across all browser windows.
+//   - No more static enigmaCompanyData, no shareholders card, no events.
+function CompanyDashboard() {
+  const { companyTicker } = useAuth();
+  const { stocks: liveStocks } = useLiveStocks();
+  const tokenHash = useTokenHash();
 
-  const recentNews = companyNews.slice(0, 3);
-  const pendingCount = companyNews.filter((n) => n.status === "PENDING").length;
-  const upcomingEvents = companyEvents
-    .filter((e) => new Date(e.date) >= new Date())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 3);
+  // Resolve the holding from the user's role-encoded ticker.
+  const holding = companyTicker ? parentDirectory[companyTicker] : null;
+  const subsidiaries = holding?.subsidiaries ?? [];
+
+  const [activeSub, setActiveSub] = useState<string>(subsidiaries[0] ?? "");
+
+  // If the role's ticker resolves AFTER first render, hydrate activeSub.
+  useEffect(() => {
+    if (!activeSub && subsidiaries.length > 0) setActiveSub(subsidiaries[0]);
+  }, [subsidiaries, activeSub]);
+
+  // ── Reactive news ──────────────────────────────────────────────────────
+  // Two feeds, both reactive:
+  //   1. MY  — this company's own submissions, sorted PENDING→APPROVED→REJECTED
+  //   2. MKT — public news (LLM + ADMIN + APPROVED company items) related to
+  //            ANY of this holding's subsidiary tickers
+  const myNewsRaw = useQuery(
+    api.news.listMyNews,
+    tokenHash ? { tokenHash } : "skip",
+  );
+  const allPublicNewsRaw = useQuery(api.news.listNews, { limit: 100 });
+
+  const recentNews = useMemo(() => {
+    if (!myNewsRaw) return [];
+    const priority: Record<string, number> = { PENDING: 0, APPROVED: 1, REJECTED: 2 };
+    return [...myNewsRaw]
+      .sort((a, b) => {
+        const pa = (priority[a.status ?? "APPROVED"] ?? 9) - (priority[b.status ?? "APPROVED"] ?? 9);
+        if (pa !== 0) return pa;
+        return b.publishedAt - a.publishedAt;
+      })
+      .slice(0, 5);
+  }, [myNewsRaw]);
+
+  const marketNews = useMemo(() => {
+    if (!allPublicNewsRaw || subsidiaries.length === 0) return [];
+    const subSet = new Set(subsidiaries);
+    return allPublicNewsRaw
+      .filter((n) => n.relatedTickers.some((t) => subSet.has(t)))
+      .slice(0, 5);
+  }, [allPublicNewsRaw, subsidiaries]);
+
+  const pendingCount = myNewsRaw?.filter((n) => n.status === "PENDING").length ?? 0;
+  const [newsTab, setNewsTab] = useState<"MY" | "MKT">("MKT");
+
+  // Static metadata for the active subsidiary (about text only).
+  const subStatic = activeSub ? stockDirectory[activeSub] : null;
+  const subLive = activeSub ? liveStocks.get(activeSub) : null;
+
+  // Effective values: live overrides static where available.
+  const price = subLive?.price ?? subStatic?.price ?? 0;
+  const changePct = subLive?.changePct ?? subStatic?.changePercent ?? 0;
+  const fund = subStatic?.fundamentals;
+
+  // ── Live chart from Convex priceHistory ────────────────────────────────
+  // Reactive subscription — appends new ticks every 15s as the engine runs.
+  const priceHistoryRaw = useQuery(
+    api.market.getPriceHistory,
+    activeSub ? { ticker: activeSub, limit: 80 } : "skip",
+  );
+  const chartData = useMemo(() => {
+    if (priceHistoryRaw && priceHistoryRaw.length > 1) {
+      // Convert {price, timestamp} → {day, price} (chart label + value).
+      return priceHistoryRaw.map((p) => ({
+        day: new Date(p.timestamp).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        price: p.price,
+      }));
+    }
+    // Fallback during first paint or when market hasn't ticked yet — use the
+    // static seed-derived chart from mockData.
+    return subStatic?.chartData["3D"] ?? [];
+  }, [priceHistoryRaw, subStatic]);
+  const chartLoading = priceHistoryRaw === undefined;
+
+  if (!holding || !subStatic || !fund) {
+    return (
+      <div className="py-20 text-center">
+        <p className="font-[var(--font-anton)] text-lg tracking-[0.1em] mb-2">COMPANY NOT FOUND</p>
+        <p className="text-[11px] text-white/40">
+          {companyTicker
+            ? `Holding ticker "${companyTicker}" isn't registered.`
+            : "Your account isn't linked to any holding company."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -457,25 +544,27 @@ function EnigmaDashboard() {
       >
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 md:w-16 md:h-16 border-2 border-white flex items-center justify-center">
-            <span className="font-[var(--font-anton)] text-lg md:text-xl tracking-wider">E</span>
+            <span className="font-[var(--font-anton)] text-lg md:text-xl tracking-wider">{holding.logoLetter}</span>
           </div>
           <div>
-            <h1 className="font-[var(--font-anton)] text-2xl md:text-3xl tracking-[0.08em] uppercase">ENIGMA GROUP</h1>
-            <p className="text-[10px] text-white/30 tracking-[0.1em] mt-0.5">Enigma Computer Science · COMPANY DASHBOARD</p>
+            <h1 className="font-[var(--font-anton)] text-2xl md:text-3xl tracking-[0.08em] uppercase">{holding.name}</h1>
+            <p className="text-[10px] text-white/30 tracking-[0.1em] mt-0.5">{holding.about?.slice(0, 60) ?? ""} · COMPANY DASHBOARD</p>
           </div>
         </div>
         <div className="text-right hidden md:block">
-          <p className="font-[var(--font-anton)] text-2xl">{"\u20B9"}{sub.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-          <p className={`text-[11px] font-medium ${sub.changePercent >= 0 ? "text-up" : "text-down"}`}>
-            {sub.changePercent >= 0 ? "+" : ""}{sub.changePercent.toFixed(2)}%
+          <p className="font-[var(--font-anton)] text-2xl">{"\u20B9"}{price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+          <p className={`text-[11px] font-medium ${changePct >= 0 ? "text-up" : "text-down"}`}>
+            {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
           </p>
         </div>
       </motion.div>
 
       {/* Subsidiary Tabs */}
       <div className="flex items-center gap-6 mb-6 overflow-x-auto scrollbar-hide border-b border-white/10">
-        {co.subsidiaries.map((ticker) => {
-          const s = stockDirectory[ticker];
+        {subsidiaries.map((ticker) => {
+          const live = liveStocks.get(ticker);
+          const fallback = stockDirectory[ticker];
+          const cp = live?.changePct ?? fallback?.changePercent ?? 0;
           const active = ticker === activeSub;
           return (
             <button
@@ -488,8 +577,8 @@ function EnigmaDashboard() {
               }`}
             >
               {ticker}
-              <span className={`ml-2 text-[9px] ${s.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                {s.changePercent >= 0 ? "+" : ""}{s.changePercent.toFixed(2)}%
+              <span className={`ml-2 text-[9px] ${cp >= 0 ? "text-up" : "text-down"}`}>
+                {cp >= 0 ? "+" : ""}{cp.toFixed(2)}%
               </span>
               {active && <span className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
             </button>
@@ -505,8 +594,10 @@ function EnigmaDashboard() {
         className="grid grid-cols-2 md:grid-cols-3 gap-[1px] bg-white/8 mb-8"
       >
         <div className="bg-bg p-4 md:p-5">
-          <span className="text-[9px] tracking-[0.15em] text-white/25">SHARES IN CIRCULATION</span>
-          <p className="font-[var(--font-anton)] text-lg mt-1">{co.sharesInCirculation.toLocaleString("en-IN")}</p>
+          <span className="text-[9px] tracking-[0.15em] text-white/25">DAY CHANGE</span>
+          <p className={`font-[var(--font-anton)] text-lg mt-1 ${changePct >= 0 ? "text-up" : "text-down"}`}>
+            {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
+          </p>
         </div>
         <div className="bg-bg p-4 md:p-5">
           <span className="text-[9px] tracking-[0.15em] text-white/25">MARKET CAP</span>
@@ -529,14 +620,21 @@ function EnigmaDashboard() {
             transition={{ duration: 0.4, delay: 0.1 }}
             className="border border-white/10 p-5"
           >
-            <p className="text-[9px] tracking-[0.15em] text-white/30 mb-4">STOCK PERFORMANCE · 3D</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[9px] tracking-[0.15em] text-white/30">
+                STOCK PERFORMANCE · LIVE
+              </p>
+              {chartLoading && (
+                <span className="text-[8px] tracking-[0.15em] text-white/20 animate-pulse">LOADING...</span>
+              )}
+            </div>
             <div className="h-48 md:h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
                   <defs>
-                    <linearGradient id="enigmaFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={sub.changePercent >= 0 ? "var(--color-up)" : "var(--color-down)"} stopOpacity={0.15} />
-                      <stop offset="100%" stopColor={sub.changePercent >= 0 ? "var(--color-up)" : "var(--color-down)"} stopOpacity={0} />
+                    <linearGradient id="companyChartFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={changePct >= 0 ? "var(--color-up)" : "var(--color-down)"} stopOpacity={0.15} />
+                      <stop offset="100%" stopColor={changePct >= 0 ? "var(--color-up)" : "var(--color-down)"} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="day" hide />
@@ -548,9 +646,9 @@ function EnigmaDashboard() {
                   <Area
                     type="monotone"
                     dataKey="price"
-                    stroke={sub.changePercent >= 0 ? "var(--color-up)" : "var(--color-down)"}
+                    stroke={changePct >= 0 ? "var(--color-up)" : "var(--color-down)"}
                     strokeWidth={1.5}
-                    fill="url(#enigmaFill)"
+                    fill="url(#companyChartFill)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -565,104 +663,112 @@ function EnigmaDashboard() {
             className="border border-white/10 p-5"
           >
             <p className="text-[9px] tracking-[0.15em] text-white/30 mb-3">ABOUT {activeSub}</p>
-            <p className="text-[12px] text-white/40 leading-relaxed">{sub.about}</p>
+            <p className="text-[12px] text-white/40 leading-relaxed">{subStatic.about}</p>
           </motion.div>
 
-          {/* Company News â€” Summary Card */}
+          {/* News Card — toggle between MARKET (LLM/admin/approved) and MY (own submissions) */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 }}
             className="border border-white/10"
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/8">
+              <div className="flex items-center gap-3">
                 <Newspaper size={13} className="text-white/30" />
-                <p className="text-[9px] tracking-[0.15em] text-white/30">COMPANY NEWS</p>
-                {pendingCount > 0 && (
-                  <span className="text-[7px] tracking-[0.1em] bg-amber-400/10 text-amber-400 border border-amber-400/20 px-1.5 py-0.5">{pendingCount} PENDING</span>
+                <button
+                  onClick={() => setNewsTab("MKT")}
+                  className={`text-[9px] tracking-[0.15em] transition-colors ${
+                    newsTab === "MKT" ? "text-white" : "text-white/30 hover:text-white/60"
+                  }`}
+                >
+                  MARKET NEWS
+                </button>
+                <span className="text-white/10">·</span>
+                <button
+                  onClick={() => setNewsTab("MY")}
+                  className={`text-[9px] tracking-[0.15em] transition-colors ${
+                    newsTab === "MY" ? "text-white" : "text-white/30 hover:text-white/60"
+                  }`}
+                >
+                  MY SUBMISSIONS
+                </button>
+                {pendingCount > 0 && newsTab === "MY" && (
+                  <span className="text-[7px] tracking-[0.1em] bg-amber-400/10 text-amber-400 border border-amber-400/20 px-1.5 py-0.5">
+                    {pendingCount} PENDING
+                  </span>
                 )}
               </div>
-              <Link href="/admin?tab=news" className="text-[9px] tracking-[0.1em] text-white/40 hover:text-white transition-colors">
+              <Link href="/admin/news" className="text-[9px] tracking-[0.1em] text-white/40 hover:text-white transition-colors">
                 VIEW ALL {"\u2192"}
               </Link>
             </div>
-            {recentNews.length > 0 ? recentNews.map((n, i) => (
-              <div key={n.id} className={`px-5 py-3.5 ${i < recentNews.length - 1 ? "border-b border-white/6" : ""}`}>
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className={`text-[7px] tracking-[0.1em] px-1 py-0.5 border ${
-                    n.status === "PENDING" ? "text-amber-400 border-amber-400/20" :
-                    n.status === "PUBLISHED" ? "text-up border-up/20" :
-                    "text-down border-down/20"
-                  }`}>{n.status}</span>
+
+            {/* MARKET tab — LLM / admin / approved-company news about your subsidiaries */}
+            {newsTab === "MKT" && (
+              marketNews.length > 0 ? marketNews.map((n, i) => (
+                <div key={n.id} className={`px-5 py-3.5 ${i < marketNews.length - 1 ? "border-b border-white/6" : ""}`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className={`text-[7px] tracking-[0.1em] px-1 py-0.5 border ${
+                      n.source === "LLM_MACRO" || n.source === "LLM_SPONTANEOUS"
+                        ? "text-blue-400/70 border-blue-400/20"
+                        : n.source === "ADMIN"
+                          ? "text-amber-400 border-amber-400/20"
+                          : "text-up border-up/20"
+                    }`}>
+                      {n.source === "LLM_MACRO" || n.source === "LLM_SPONTANEOUS" ? "AI" : n.source}
+                    </span>
+                    {n.relatedTickers.filter((t) => subsidiaries.includes(t)).slice(0, 3).map((t) => (
+                      <span key={t} className="text-[7px] tracking-[0.1em] text-white/30">{t}</span>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-white/60">{n.headline}</p>
+                  <p className="text-[10px] text-white/25 mt-0.5">
+                    {new Date(n.publishedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
-                <p className="text-[11px] text-white/60">{n.title}</p>
-                <p className="text-[10px] text-white/25 mt-0.5">{new Date(n.timestamp).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-              </div>
-            )) : (
-              <div className="px-5 py-6 text-center">
-                <p className="text-[10px] text-white/20">No news articles yet</p>
-              </div>
+              )) : (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-[10px] text-white/20">
+                    No market news mentioning {subsidiaries.join(", ")} yet. AI news fires every ~5 minutes.
+                  </p>
+                </div>
+              )
+            )}
+
+            {/* MY tab — own submissions sorted by status */}
+            {newsTab === "MY" && (
+              recentNews.length > 0 ? recentNews.map((n, i) => {
+                const status = n.status ?? "APPROVED";
+                return (
+                  <div key={n.id} className={`px-5 py-3.5 ${i < recentNews.length - 1 ? "border-b border-white/6" : ""}`}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[7px] tracking-[0.1em] px-1 py-0.5 border ${
+                        status === "PENDING" ? "text-amber-400 border-amber-400/20" :
+                        status === "APPROVED" ? "text-up border-up/20" :
+                        "text-down border-down/20"
+                      }`}>{status}</span>
+                      {n.relatedTickers.slice(0, 2).map((t) => (
+                        <span key={t} className="text-[7px] tracking-[0.1em] text-white/30">{t}</span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-white/60">{n.headline}</p>
+                    <p className="text-[10px] text-white/25 mt-0.5">
+                      {new Date(n.publishedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </div>
+                );
+              }) : (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-[10px] text-white/20">No submissions yet. Click NEW MESSAGE on the news page.</p>
+                </div>
+              )
             )}
           </motion.div>
         </div>
 
         {/* Right sidebar */}
         <div className="space-y-6">
-          {/* Largest Shareholders */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
-            className="border border-white/10"
-          >
-            <div className="px-5 py-4 border-b border-white/8">
-              <p className="text-[9px] tracking-[0.15em] text-white/30">LARGEST SHAREHOLDERS</p>
-            </div>
-            {co.shareholders.map((sh, i) => (
-              <div key={sh.name} className={`flex items-center justify-between px-5 py-3 ${i < co.shareholders.length - 1 ? "border-b border-white/6" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-white/20 w-4">{i + 1}</span>
-                  <span className="text-[11px] text-white/60">{sh.name}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-white/40 font-[var(--font-anton)]">{sh.shares.toLocaleString("en-IN")}</span>
-                  <span className="text-[9px] text-white/20 ml-2">{sh.percentage}%</span>
-                </div>
-              </div>
-            ))}
-          </motion.div>
-
-          {/* Events â€” Summary Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            className="border border-white/10"
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
-              <div className="flex items-center gap-2">
-                <Calendar size={13} className="text-white/30" />
-                <p className="text-[9px] tracking-[0.15em] text-white/30">UPCOMING EVENTS</p>
-              </div>
-              <Link href="/admin?tab=events" className="text-[9px] tracking-[0.1em] text-white/40 hover:text-white transition-colors">
-                VIEW ALL {"\u2192"}
-              </Link>
-            </div>
-            {upcomingEvents.length > 0 ? upcomingEvents.map((ev, i) => (
-              <div key={ev.id} className={`flex items-center justify-between px-5 py-3 ${i < upcomingEvents.length - 1 ? "border-b border-white/6" : ""}`}>
-                <div>
-                  <p className="text-[11px] text-white/60">{ev.title}</p>
-                  <p className="text-[10px] text-white/25 mt-0.5">{new Date(ev.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
-                </div>
-              </div>
-            )) : (
-              <div className="px-5 py-6 text-center">
-                <p className="text-[10px] text-white/20">No upcoming events</p>
-              </div>
-            )}
-          </motion.div>
-
           {/* Quick Stats */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -697,7 +803,7 @@ function EnigmaDashboard() {
 function TotalAdminDashboard() {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab");
-  const { marketOpen, toggleMarket, listedStocks, toggleListing, announcements, addAnnouncement, companyNews, approveNews, rejectNews, companyEvents, removeEvent } = useAdmin();
+  const { marketOpen, toggleMarket, listedStocks, toggleListing, announcements, addAnnouncement, companyNews, approveNews, rejectNews } = useAdmin();
   const [annTitle, setAnnTitle] = useState("");
   const [annContent, setAnnContent] = useState("");
   const [showAnnForm, setShowAnnForm] = useState(false);
@@ -1267,88 +1373,7 @@ function TotalAdminDashboard() {
     );
   }
 
-  /* ——— EVENTS TAB ——— */
-  if (tab === "events") {
-    const sortedEvents = [...companyEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const upcoming = sortedEvents.filter((e) => new Date(e.date) >= new Date());
-    const past = sortedEvents.filter((e) => new Date(e.date) < new Date());
-
-    return (
-      <>
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <h2 className="font-[var(--font-anton)] text-lg tracking-[0.08em]">COMPANY EVENTS</h2>
-          <p className="text-[10px] text-white/30 mt-0.5">{upcoming.length} upcoming · {past.length} past</p>
-        </motion.div>
-
-        {/* Upcoming Events */}
-        {upcoming.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="border border-white/10 mb-6">
-            <div className="px-5 py-4 border-b border-white/8">
-              <p className="text-[9px] tracking-[0.15em] text-white/30">UPCOMING ({upcoming.length})</p>
-            </div>
-            {upcoming.map((evt, i) => (
-              <div key={evt.id} className={`flex items-start gap-5 px-5 py-4 ${i < upcoming.length - 1 ? "border-b border-white/6" : ""}`}>
-                <div className="shrink-0 w-14 text-center border border-white/10 py-2">
-                  <p className="font-[var(--font-anton)] text-lg leading-none">{new Date(evt.date).getDate()}</p>
-                  <p className="text-[8px] tracking-[0.15em] text-white/30 mt-1">{new Date(evt.date).toLocaleDateString("en-IN", { month: "short" }).toUpperCase()}</p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Calendar size={10} className="text-white/25" />
-                    <span className="text-[8px] tracking-[0.1em] text-white/20">{evt.company}</span>
-                  </div>
-                  <h3 className="text-[13px] text-white/80 font-medium mb-1">{evt.title}</h3>
-                  {evt.description && <p className="text-[11px] text-white/40 leading-relaxed">{evt.description}</p>}
-                  <p className="text-[9px] text-white/20 mt-2">{new Date(evt.date).toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
-                </div>
-                <button
-                  onClick={() => removeEvent(evt.id)}
-                  className="shrink-0 p-2 text-white/20 hover:text-down transition-colors"
-                  title="Remove event"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Past Events */}
-        {past.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="border border-white/10">
-            <div className="px-5 py-4 border-b border-white/8">
-              <p className="text-[9px] tracking-[0.15em] text-white/30">PAST ({past.length})</p>
-            </div>
-            {past.map((evt, i) => (
-              <div key={evt.id} className={`flex items-start gap-5 px-5 py-4 opacity-50 ${i < past.length - 1 ? "border-b border-white/6" : ""}`}>
-                <div className="shrink-0 w-14 text-center border border-white/10 py-2">
-                  <p className="font-[var(--font-anton)] text-lg leading-none">{new Date(evt.date).getDate()}</p>
-                  <p className="text-[8px] tracking-[0.15em] text-white/30 mt-1">{new Date(evt.date).toLocaleDateString("en-IN", { month: "short" }).toUpperCase()}</p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Calendar size={10} className="text-white/25" />
-                    <span className="text-[8px] tracking-[0.1em] text-white/20">{evt.company}</span>
-                  </div>
-                  <h3 className="text-[13px] text-white/80 font-medium mb-1">{evt.title}</h3>
-                  {evt.description && <p className="text-[11px] text-white/40 leading-relaxed">{evt.description}</p>}
-                </div>
-              </div>
-            ))}
-          </motion.div>
-        )}
-
-        {companyEvents.length === 0 && (
-          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="border border-white/10">
-            <div className="px-5 py-12 text-center">
-              <Calendar size={24} className="mx-auto text-white/10 mb-3" />
-              <p className="text-[11px] text-white/25">No events scheduled</p>
-            </div>
-          </motion.div>
-        )}
-      </>
-    );
-  }
+  /* Events tab removed — concept dropped from the platform. */
 
   /* ——— DASHBOARD (default) ——— */
   const displayedUsers = recentUsers.slice(0, 3);
@@ -1413,7 +1438,6 @@ function TotalAdminDashboard() {
           { key: "ledger", label: "LEDGER" },
           { key: "investors", label: "INVESTORS" },
           { key: "news", label: "NEWS" },
-          { key: "events", label: "EVENTS" },
         ].map(({ key, label }) => {
           const isActive = (tab || "") === key;
           return (
@@ -1747,7 +1771,7 @@ export default function AdminPage() {
         </motion.div>
       )}
 
-      {role === "company" ? <EnigmaDashboard /> : <Suspense><TotalAdminDashboard /></Suspense>}
+      {role === "company" ? <CompanyDashboard /> : <Suspense><TotalAdminDashboard /></Suspense>}
     </div>
   );
 }

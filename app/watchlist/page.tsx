@@ -12,6 +12,7 @@ import {
   updatePriceAlerts,
   type WatchlistItem,
 } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 
 type SortKey = "ticker" | "price";
 type SortDir = "asc" | "desc";
@@ -25,13 +26,12 @@ export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePoll(async () => {
     if (!isLoggedIn) { setLoading(false); return; }
-    getWatchlist().then(res => {
-      if (res.data) setItems(res.data);
-      setLoading(false);
-    });
-  }, [isLoggedIn]);
+    const res = await getWatchlist();
+    if (res.data) setItems(res.data);
+    setLoading(false);
+  }, 5000);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

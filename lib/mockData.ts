@@ -1,4 +1,4 @@
-﻿// ─── Indian Market Indices ───────────────────────────────
+// ─── Indian Market Indices ───────────────────────────────
 export interface IndexData {
   name: string;
   slug: string;
@@ -29,20 +29,6 @@ function generateIndexChart(base: number): Record<string, { day: string; price: 
   };
 }
 
-export const indices: IndexData[] = [
-  { name: "AEON 50", slug: "aeon-50", value: 23519.35, change: 187.45, changePercent: 0.80, sparkline: [23200, 23280, 23350, 23410, 23460, 23500, 23519], description: "The AEON 50 index tracks the 50 largest and most liquid companies listed on the MCSE. It is the benchmark index for the exchange.", constituents: ["ENAI", "ECLOUD", "CELBIO", "MTEK", "CELENR", "ESOFT", "GMAUTO", "MSMEDIA", "MACAD", "MSSTD"], chartData: generateIndexChart(23519.35) },
-  { name: "AEDEX", slug: "aedex", value: 77478.93, change: 602.75, changePercent: 0.78, sparkline: [76800, 76950, 77100, 77250, 77350, 77420, 77478], description: "The AEDEX is a broad-market index covering all listed stocks on the MCSE, weighted by market capitalisation.", constituents: ["ENAI", "ECLOUD", "CELBIO", "MTEK", "CELENR", "ESOFT", "GMAUTO", "MSMEDIA", "MACAD", "CELRES", "ERLAB", "MSSTD", "GMRACE", "ERPRESS", "MSDIGI", "MPUB", "ERLEARN", "GMSERV", "INMKT", "INDATA", "INCON"], chartData: generateIndexChart(77478.93) },
-  { name: "BANKAEON", slug: "bankaeon", value: 50892.15, change: -123.40, changePercent: -0.24, sparkline: [51050, 51010, 50980, 50950, 50920, 50900, 50892], description: "BANKAEON is the financial-sector index tracking companies in banking, financial services, and insurance.", constituents: ["INDATA", "INMKT", "INCON"], chartData: generateIndexChart(50892.15) },
-  { name: "MIDCAPEON", slug: "midcapeon", value: 11245.60, change: 89.30, changePercent: 0.80, sparkline: [11140, 11160, 11180, 11200, 11220, 11238, 11245], description: "MIDCAPEON tracks mid-cap companies on the MCSE — those ranked 11th to 21st by market capitalisation.", constituents: ["CELRES", "ERLAB", "MSSTD", "GMRACE", "ERPRESS", "MSDIGI", "MPUB", "ERLEARN", "GMSERV", "INMKT", "INDATA"], chartData: generateIndexChart(11245.60) },
-  { name: "FINAEON", slug: "finaeon", value: 23412.80, change: 45.20, changePercent: 0.19, sparkline: [23360, 23370, 23380, 23390, 23400, 23408, 23412], description: "FINAEON is the financial analytics index, covering data, consulting, and market research firms on the MCSE.", constituents: ["INDATA", "INMKT", "INCON"], chartData: generateIndexChart(23412.80) },
-  { name: "ITAEON", slug: "itaeon", value: 38642.10, change: 312.80, changePercent: 0.82, sparkline: [38280, 38350, 38420, 38480, 38550, 38610, 38642], description: "ITAEON tracks information technology companies on the MCSE, including software, cloud, and AI firms.", constituents: ["ENAI", "ECLOUD", "ESOFT", "MTEK"], chartData: generateIndexChart(38642.10) },
-  { name: "AUTOAEON", slug: "autoaeon", value: 21834.50, change: -78.60, changePercent: -0.36, sparkline: [21920, 21900, 21880, 21860, 21848, 21840, 21834], description: "AUTOAEON is the automotive-sector index tracking racing, automotive manufacturing, and services companies.", constituents: ["GMAUTO", "GMRACE", "GMSERV"], chartData: generateIndexChart(21834.50) },
-  { name: "PHARMAEON", slug: "pharmaeon", value: 17298.40, change: 142.30, changePercent: 0.83, sparkline: [17120, 17150, 17190, 17220, 17255, 17280, 17298], description: "PHARMAEON covers science, research, and biotech companies on the MCSE.", constituents: ["CELBIO", "CELRES", "CELENR", "ERLAB"], chartData: generateIndexChart(17298.40) },
-];
-
-export const indexDirectory: Record<string, IndexData> = {};
-for (const idx of indices) indexDirectory[idx.slug] = idx;
-
 // ─── Parent Companies (holding companies, not traded) ───
 export interface ParentCompany {
   ticker: string;
@@ -56,66 +42,174 @@ export interface ParentCompany {
 
 export const parentCompanies: ParentCompany[] = [
   {
-    ticker: "MATHSOC",
-    name: "Math Society Group",
-    about: "Math Society is the flagship mathematics club of the institution. As a holding company it oversees its three subsidiaries: MathSoc Academy (education), MathSoc Publishing (academic publishing), and MathSoc Tech (edtech solutions).",
-    subsidiaries: ["MACAD", "MPUB", "MTEK"],
-    totalEmployees: 240,
+    ticker: "ENIGMA",
+    name: "Enigma Group",
+    about: "Enigma is the premier computer science and coding club turned tech conglomerate, operating across software, cloud infrastructure, and artificial intelligence.",
+    subsidiaries: ["ESOFT", "ECLOUD", "ENAI"],
+    totalEmployees: 850 + 520 + 280,
+    logoLetter: "E",
+    founded: "2017",
+  },
+  {
+    ticker: "ERUDITE",
+    name: "Erudite Group",
+    about: "Erudite is the literary and debate society reimagined as a media and education conglomerate, running a learning platform, publishing house, and digital research division.",
+    subsidiaries: ["ERLEARN", "ERPRESS", "ERLAB"],
+    totalEmployees: 420 + 210 + 110,
+    logoLetter: "R",
+    founded: "2016",
+  },
+  {
+    ticker: "MARC",
+    name: "MARC Group",
+    about: "MARC is AEON's foremost financial analytics holding, running finance advisory, market research, and management consulting divisions.",
+    subsidiaries: ["MARCF", "MARCM", "MARCC"],
+    totalEmployees: 620 + 340 + 180,
     logoLetter: "M",
     founded: "2018",
   },
   {
-    ticker: "ENIGMA",
-    name: "Enigma Group",
-    about: "Enigma is the premier computer science and coding club. As a holding company it manages Enigma Software (development), Enigma Cloud (cloud services), and Enigma AI (artificial intelligence research).",
-    subsidiaries: ["ESOFT", "ECLOUD", "ENAI"],
-    totalEmployees: 310,
-    logoLetter: "E",
+    ticker: "AMBROSIA",
+    name: "Ambrosia Group",
+    about: "Ambrosia is AEON's leading food and lifestyle conglomerate, operating upscale restaurant chains, a food-tech delivery platform, and a luxury dining brand.",
+    subsidiaries: ["AMBR", "AMBF", "AMBL"],
+    totalEmployees: 380 + 200 + 90,
+    logoLetter: "A",
+    founded: "2019",
+  },
+  {
+    ticker: "ROBOVERSE",
+    name: "Roboverse Group",
+    about: "Roboverse designs and manufactures autonomous robotic systems for defense and industrial applications, from combat bots to AI-powered automation platforms.",
+    subsidiaries: ["RBVX", "RBVM", "RBVA"],
+    totalEmployees: 720 + 480 + 210,
+    logoLetter: "R",
+    founded: "2018",
+  },
+  {
+    ticker: "COGNITIA",
+    name: "Cognitia Group",
+    about: "Cognitia is a cognitive technology conglomerate specialising in AI research, behavioural analytics, and next-generation intelligent products for enterprise and government.",
+    subsidiaries: ["CGNR", "CGNA", "CGNX"],
+    totalEmployees: 680 + 400 + 160,
+    logoLetter: "C",
     founded: "2017",
   },
   {
     ticker: "GASMONKEYS",
     name: "Gas Monkeys Group",
-    about: "Gas Monkeys is the automotive and mechanical engineering club. The holding company oversees GM Racing (racing events), GM Automotive (parts manufacturing), and GM Services (maintenance and repair).",
+    about: "Gas Monkeys is AEON's iconic automotive conglomerate, running a formula motorsport team, a parts manufacturing plant, and a vehicle servicing network.",
     subsidiaries: ["GMRACE", "GMAUTO", "GMSERV"],
-    totalEmployees: 180,
+    totalEmployees: 550 + 380 + 200,
     logoLetter: "G",
     founded: "2019",
   },
   {
-    ticker: "MASTERSHOT",
-    name: "MasterShot Group",
-    about: "MasterShot is the media and entertainment society. The holding company manages MS Studios (film production), MS Digital (digital content), and MS Media (media distribution).",
-    subsidiaries: ["MSSTD", "MSDIGI", "MSMEDIA"],
-    totalEmployees: 220,
-    logoLetter: "S",
+    ticker: "LINCOLNLABS",
+    name: "Lincoln Labs Group",
+    about: "Lincoln Labs is AEON's premier research conglomerate spanning medical devices, pharmaceutical R&D, and biotech innovation.",
+    subsidiaries: ["LLMED", "LLRES", "LLBIO"],
+    totalEmployees: 780 + 450 + 200,
+    logoLetter: "L",
+    founded: "2016",
+  },
+  {
+    ticker: "AERO",
+    name: "Aero Group",
+    about: "Aero is a defense-tech group building autonomous drone systems, advanced propulsion units, and integrated avionics for defense and civilian aerospace applications.",
+    subsidiaries: ["AEROD", "AEROP", "AEROS"],
+    totalEmployees: 700 + 420 + 190,
+    logoLetter: "A",
     founded: "2018",
   },
   {
-    ticker: "ERUDITE",
-    name: "Erudite Group",
-    about: "Erudite is the literary and general knowledge society. The holding company oversees Erudite Learn (learning platform), Erudite Press (publishing house), and Erudite Labs (research division).",
-    subsidiaries: ["ERLEARN", "ERPRESS", "ERLAB"],
-    totalEmployees: 195,
-    logoLetter: "R",
+    ticker: "APEXPMI",
+    name: "Apex PMI Group",
+    about: "Apex PMI is AEON's flagship project management and financial advisory conglomerate, offering infrastructure finance, investment management, and executive consulting.",
+    subsidiaries: ["APXF", "APXI", "APXM"],
+    totalEmployees: 580 + 320 + 165,
+    logoLetter: "A",
     founded: "2017",
   },
   {
-    ticker: "INSIGHT",
-    name: "Insight Group",
-    about: "Insight is the data analytics and business intelligence club. The holding company manages Insight Data (analytics), Insight Markets (market research), and Insight Consulting (advisory services).",
-    subsidiaries: ["INDATA", "INMKT", "INCON"],
-    totalEmployees: 165,
-    logoLetter: "I",
+    ticker: "ACM",
+    name: "ACM Group",
+    about: "ACM Group is a technology conglomerate born from the computing society, running applied research, enterprise software, and a data science platform across AEON's institutions.",
+    subsidiaries: ["ACMR", "ACMS", "ACMD"],
+    totalEmployees: 640 + 380 + 175,
+    logoLetter: "A",
+    founded: "2017",
+  },
+  {
+    ticker: "ADVENTURE",
+    name: "Adventure Group",
+    about: "Adventure Group is AEON's premier outdoor and experiential lifestyle company, operating adventure tourism circuits, a sports equipment brand, and immersive experience parks.",
+    subsidiaries: ["ADVT", "ADVS", "ADVX"],
+    totalEmployees: 340 + 175 + 85,
+    logoLetter: "A",
     founded: "2020",
   },
   {
-    ticker: "CELESTE",
-    name: "Celeste Group",
-    about: "Celeste is the astronomy and space science research club. The holding company oversees Celeste Research (space research), Celeste Energy (clean energy), and Celeste BioSystems (biotechnology).",
-    subsidiaries: ["CELRES", "CELENR", "CELBIO"],
-    totalEmployees: 275,
-    logoLetter: "C",
+    ticker: "AUV",
+    name: "AUV Group",
+    about: "AUV Group develops autonomous underwater vehicles for defense surveillance, deep-sea exploration, and marine infrastructure monitoring.",
+    subsidiaries: ["AUVS", "AUVR", "AUVM"],
+    totalEmployees: 620 + 360 + 160,
+    logoLetter: "U",
+    founded: "2018",
+  },
+  {
+    ticker: "MEDIA",
+    name: "Media Group",
+    about: "Media Group is AEON's broadcast and content powerhouse, running a film and TV production studio, a digital content network, and a multi-channel broadcast platform.",
+    subsidiaries: ["MEDP", "MEDD", "MEDB"],
+    totalEmployees: 500 + 270 + 130,
+    logoLetter: "M",
+    founded: "2017",
+  },
+  {
+    ticker: "AEIFORIA",
+    name: "Aeiforia Group",
+    about: "Aeiforia curates fashion, arts, and premium lifestyle for AEON's discerning consumers, operating a fashion house, an arts collective, and a luxury lifestyle brand.",
+    subsidiaries: ["AEIF", "AEIA", "AEIL"],
+    totalEmployees: 310 + 155 + 80,
+    logoLetter: "A",
+    founded: "2019",
+  },
+  {
+    ticker: "QUBIT",
+    name: "Qubit Group",
+    about: "Qubit Group is AEON's quantum computing pioneer, running advanced quantum research, quantum software development, and consulting services for enterprises entering the quantum era.",
+    subsidiaries: ["QBTR", "QBTS", "QBTC"],
+    totalEmployees: 880 + 520 + 240,
+    logoLetter: "Q",
+    founded: "2018",
+  },
+  {
+    ticker: "MASTERSHOT",
+    name: "MasterShot Group",
+    about: "MasterShot Group is the media and entertainment society turned AEON's top entertainment company, producing films, digital content, and operating a broad media distribution network.",
+    subsidiaries: ["MSSTD", "MSDIGI", "MSMEDIA"],
+    totalEmployees: 560 + 290 + 145,
+    logoLetter: "S",
+    founded: "2017",
+  },
+  {
+    ticker: "EIC",
+    name: "EIC Group",
+    about: "EIC Group is AEON's startup ecosystem conglomerate, running early-stage venture finance, growth investment, and innovation management.",
+    subsidiaries: ["EICF", "EICI", "EICM"],
+    totalEmployees: 520 + 280 + 140,
+    logoLetter: "E",
+    founded: "2018",
+  },
+  {
+    ticker: "SYNOLO",
+    name: "Synolo Group",
+    about: "Synolo is AEON's cultural production and community entertainment group, running a live-events studio, a productions label, and a cross-sector innovation arm.",
+    subsidiaries: ["SYNS", "SYNP", "SYNI"],
+    totalEmployees: 365 + 195 + 95,
+    logoLetter: "S",
     founded: "2019",
   },
 ];
@@ -129,12 +223,12 @@ export function getSubsidiariesOf(parentTicker: string): string[] {
 
 // ─── Portfolio / Investments ────────────────────────────
 export const investments = {
-  currentValue: 487693.69,
-  investedValue: 421500.0,
-  totalReturns: 66193.69,
-  totalReturnsPercent: 15.71,
-  dayReturns: 2847.30,
-  dayReturnsPercent: 0.59,
+  currentValue: 0,
+  investedValue: 0,
+  totalReturns: 0,
+  totalReturnsPercent: 0,
+  dayReturns: 0,
+  dayReturnsPercent: 0,
 };
 
 // ─── Holdings ───────────────────────────────────────────
@@ -153,106 +247,7 @@ export interface Holding {
   sparkline: number[];
 }
 
-export const holdings: Holding[] = [
-  {
-    ticker: "MACAD",
-    name: "MathSoc Academy",
-    qty: 50,
-    avgPrice: 980.0,
-    currentPrice: 1198.50,
-    dayChange: 14.30,
-    dayChangePercent: 1.21,
-    returns: 10925.0,
-    returnsPercent: 22.30,
-    currentValue: 59925.0,
-    investedValue: 49000.0,
-    sparkline: [1170, 1178, 1182, 1186, 1190, 1195, 1198],
-  },
-  {
-    ticker: "ECLOUD",
-    name: "Enigma Cloud",
-    qty: 10,
-    avgPrice: 2780.0,
-    currentPrice: 3215.40,
-    dayChange: -18.60,
-    dayChangePercent: -0.58,
-    returns: 4354.0,
-    returnsPercent: 15.66,
-    currentValue: 32154.0,
-    investedValue: 27800.0,
-    sparkline: [3240, 3230, 3225, 3220, 3218, 3216, 3215],
-  },
-  {
-    ticker: "GMAUTO",
-    name: "GM Automotive",
-    qty: 30,
-    avgPrice: 1180.0,
-    currentPrice: 1456.20,
-    dayChange: 17.40,
-    dayChangePercent: 1.21,
-    returns: 8286.0,
-    returnsPercent: 23.41,
-    currentValue: 43686.0,
-    investedValue: 35400.0,
-    sparkline: [1425, 1430, 1436, 1440, 1448, 1453, 1456],
-  },
-  {
-    ticker: "MSSTD",
-    name: "MS Studios",
-    qty: 40,
-    avgPrice: 880.0,
-    currentPrice: 1087.30,
-    dayChange: 8.10,
-    dayChangePercent: 0.75,
-    returns: 8292.0,
-    returnsPercent: 23.56,
-    currentValue: 43492.0,
-    investedValue: 35200.0,
-    sparkline: [1070, 1074, 1078, 1080, 1083, 1085, 1087],
-  },
-  {
-    ticker: "ERLEARN",
-    name: "Erudite Learn",
-    qty: 80,
-    avgPrice: 490.0,
-    currentPrice: 618.70,
-    dayChange: -4.90,
-    dayChangePercent: -0.79,
-    returns: 10296.0,
-    returnsPercent: 26.27,
-    currentValue: 49496.0,
-    investedValue: 39200.0,
-    sparkline: [625, 623, 621, 620, 619, 619, 618],
-  },
-  {
-    ticker: "INDATA",
-    name: "Insight Data",
-    qty: 150,
-    avgPrice: 215.0,
-    currentPrice: 282.45,
-    dayChange: 3.30,
-    dayChangePercent: 1.18,
-    returns: 10117.5,
-    returnsPercent: 31.37,
-    currentValue: 42367.5,
-    investedValue: 32250.0,
-    sparkline: [275, 277, 278, 279, 280, 281, 282],
-  },
-  {
-    ticker: "CELBIO",
-    name: "Celeste Bio",
-    qty: 15,
-    avgPrice: 1780.0,
-    currentPrice: 2148.60,
-    dayChange: 38.20,
-    dayChangePercent: 1.81,
-    returns: 5529.0,
-    returnsPercent: 20.71,
-    currentValue: 32229.0,
-    investedValue: 26700.0,
-    sparkline: [2100, 2110, 2118, 2128, 2135, 2142, 2148],
-  },
-];
+export const holdings: Holding[] = [];
 
 // ─── Watchlist ──────────────────────────────────────────
 export interface WatchlistStock {
@@ -268,89 +263,9 @@ export interface WatchlistStock {
   sparkline: number[];
 }
 
-export const watchlist: WatchlistStock[] = [
-  {
-    ticker: "MTEK",
-    name: "MathSoc Tech",
-    shares: 20,
-    price: 2112.80,
-    dayChange: 25.40,
-    dayChangePercent: 1.22,
-    volume: "6.8M",
-    w52Low: 1450,
-    w52High: 2350,
-    sparkline: [2080, 2085, 2090, 2095, 2100, 2108, 2112],
-  },
-  {
-    ticker: "ESOFT",
-    name: "Enigma Software",
-    shares: 35,
-    price: 1842.90,
-    dayChange: -10.30,
-    dayChangePercent: -0.56,
-    volume: "8.2M",
-    w52Low: 1280,
-    w52High: 2100,
-    sparkline: [1855, 1852, 1848, 1846, 1844, 1843, 1842],
-  },
-  {
-    ticker: "ENAI",
-    name: "Enigma AI",
-    shares: 8,
-    price: 4512.60,
-    dayChange: 62.80,
-    dayChangePercent: 1.41,
-    volume: "4.1M",
-    w52Low: 2900,
-    w52High: 4800,
-    sparkline: [4440, 4455, 4470, 4485, 4495, 4505, 4512],
-  },
-  {
-    ticker: "MSDIGI",
-    name: "MS Digital",
-    price: 785.40,
-    dayChange: 5.60,
-    dayChangePercent: 0.72,
-    volume: "9.4M",
-    w52Low: 520,
-    w52High: 860,
-    sparkline: [776, 778, 780, 781, 783, 784, 785],
-  },
-  {
-    ticker: "CELRES",
-    name: "Celeste Research",
-    shares: 12,
-    price: 984.20,
-    dayChange: 12.40,
-    dayChangePercent: 1.28,
-    volume: "5.5M",
-    w52Low: 650,
-    w52High: 1080,
-    sparkline: [968, 972, 975, 978, 980, 982, 984],
-  },
-  {
-    ticker: "ERPRESS",
-    name: "Erudite Press",
-    price: 342.10,
-    dayChange: 4.90,
-    dayChangePercent: 1.45,
-    volume: "11.2M",
-    w52Low: 210,
-    w52High: 380,
-    sparkline: [335, 336, 337, 339, 340, 341, 342],
-  },
-  {
-    ticker: "GMRACE",
-    name: "GM Racing",
-    price: 892.30,
-    dayChange: -6.70,
-    dayChangePercent: -0.74,
-    volume: "7.3M",
-    w52Low: 580,
-    w52High: 980,
-    sparkline: [900, 898, 896, 895, 893, 893, 892],
-  },
-];
+// Real watchlist is pulled from /api/investor/watchlist via TradingContext.
+// This is just the fallback for unauthenticated rendering.
+export const watchlist: WatchlistStock[] = [];
 
 // ─── Most Traded ────────────────────────────────────────
 export interface MostTradedStock {
@@ -361,12 +276,8 @@ export interface MostTradedStock {
   dayChangePercent: number;
 }
 
-export const mostTraded: MostTradedStock[] = [
-  { ticker: "MACAD", name: "MathSoc Academy", price: 1198.50, dayChange: 14.30, dayChangePercent: 1.21 },
-  { ticker: "ECLOUD", name: "Enigma Cloud", price: 3215.40, dayChange: -18.60, dayChangePercent: -0.58 },
-  { ticker: "MSSTD", name: "MS Studios", price: 1087.30, dayChange: 8.10, dayChangePercent: 0.75 },
-  { ticker: "INDATA", name: "Insight Data", price: 282.45, dayChange: 3.30, dayChangePercent: 1.18 },
-];
+// Live "most traded" is pulled via the screener API. This is the empty default.
+export const mostTraded: MostTradedStock[] = [];
 
 // ─── Top Movers ─────────────────────────────────────────
 export interface MoverStock {
@@ -378,113 +289,48 @@ export interface MoverStock {
   sparkline: number[];
 }
 
-export const topGainers: MoverStock[] = [
-  { ticker: "CELBIO", name: "Celeste Bio", price: 2148.60, dayChangePercent: 1.81, volume: "6.2M", sparkline: [2100, 2110, 2118, 2128, 2135, 2142, 2148] },
-  { ticker: "ERPRESS", name: "Erudite Press", price: 342.10, dayChangePercent: 1.45, volume: "11.2M", sparkline: [335, 336, 337, 339, 340, 341, 342] },
-  { ticker: "ENAI", name: "Enigma AI", price: 4512.60, dayChangePercent: 1.41, volume: "4.1M", sparkline: [4440, 4455, 4470, 4485, 4495, 4505, 4512] },
-  { ticker: "CELRES", name: "Celeste Research", price: 984.20, dayChangePercent: 1.28, volume: "5.5M", sparkline: [968, 972, 975, 978, 980, 982, 984] },
-  { ticker: "MTEK", name: "MathSoc Tech", price: 2112.80, dayChangePercent: 1.22, volume: "6.8M", sparkline: [2080, 2085, 2090, 2095, 2100, 2108, 2112] },
-  { ticker: "MACAD", name: "MathSoc Academy", price: 1198.50, dayChangePercent: 1.21, volume: "9.4M", sparkline: [1170, 1178, 1182, 1186, 1190, 1195, 1198] },
-  { ticker: "GMAUTO", name: "GM Automotive", price: 1456.20, dayChangePercent: 1.21, volume: "8.8M", sparkline: [1425, 1430, 1436, 1440, 1448, 1453, 1456] },
-  { ticker: "INDATA", name: "Insight Data", price: 282.45, dayChangePercent: 1.18, volume: "15.3M", sparkline: [275, 277, 278, 279, 280, 281, 282] },
-];
-
-export const topLosers: MoverStock[] = [
-  { ticker: "ERLEARN", name: "Erudite Learn", price: 618.70, dayChangePercent: -0.79, volume: "10.1M", sparkline: [625, 623, 621, 620, 619, 619, 618] },
-  { ticker: "GMRACE", name: "GM Racing", price: 892.30, dayChangePercent: -0.74, volume: "7.3M", sparkline: [900, 898, 896, 895, 893, 893, 892] },
-  { ticker: "ECLOUD", name: "Enigma Cloud", price: 3215.40, dayChangePercent: -0.58, volume: "5.4M", sparkline: [3240, 3230, 3225, 3220, 3218, 3216, 3215] },
-  { ticker: "ESOFT", name: "Enigma Software", price: 1842.90, dayChangePercent: -0.56, volume: "8.2M", sparkline: [1855, 1852, 1848, 1846, 1844, 1843, 1842] },
-  { ticker: "GMSERV", name: "GM Services", price: 562.80, dayChangePercent: -0.44, volume: "6.1M", sparkline: [566, 565, 564, 564, 563, 563, 562] },
-  { ticker: "INMKT", name: "Insight Markets", price: 428.90, dayChangePercent: -0.35, volume: "7.8M", sparkline: [432, 431, 430, 430, 429, 429, 428] },
-];
-
-export const volumeShockers: MoverStock[] = [
-  { ticker: "INDATA", name: "Insight Data", price: 282.45, dayChangePercent: 1.18, volume: "15.3M", sparkline: [275, 277, 278, 279, 280, 281, 282] },
-  { ticker: "ERPRESS", name: "Erudite Press", price: 342.10, dayChangePercent: 1.45, volume: "11.2M", sparkline: [335, 336, 337, 339, 340, 341, 342] },
-  { ticker: "ERLEARN", name: "Erudite Learn", price: 618.70, dayChangePercent: -0.79, volume: "10.1M", sparkline: [625, 623, 621, 620, 619, 619, 618] },
-  { ticker: "MACAD", name: "MathSoc Academy", price: 1198.50, dayChangePercent: 1.21, volume: "9.4M", sparkline: [1170, 1178, 1182, 1186, 1190, 1195, 1198] },
-  { ticker: "MSDIGI", name: "MS Digital", price: 785.40, dayChangePercent: 0.72, volume: "9.4M", sparkline: [776, 778, 780, 781, 783, 784, 785] },
-  { ticker: "GMAUTO", name: "GM Automotive", price: 1456.20, dayChangePercent: 1.21, volume: "8.8M", sparkline: [1425, 1430, 1436, 1440, 1448, 1453, 1456] },
-];
+// Live movers come from /api/market/screener (polled in each page that uses them).
+export const topGainers: MoverStock[] = [];
+export const topLosers: MoverStock[] = [];
+export const volumeShockers: MoverStock[] = [];
 
 // ─── Market Breadth ─────────────────────────────────────
+// Live breadth comes from /api/market/breadth. This is a zeroed default.
 export const marketBreadth = {
-  advances: 1247,
-  declines: 892,
-  unchanged: 61,
+  advances: 0,
+  declines: 0,
+  unchanged: 0,
 };
 
 // ─── Products & Tools ───────────────────────────────────
 export const productsAndTools = [
-  { label: "IPO", icon: "target", description: "Apply to upcoming initial public offerings" },
-  { label: "BONDS", icon: "landmark", description: "Fixed-income securities for steady returns" },
-  { label: "ETFs", icon: "layers", description: "Exchange-traded funds across sectors" },
   { label: "INTRADAY SCREENER", icon: "scan", description: "Filter stocks by technical signals" },
-  { label: "STOCKS SIP", icon: "repeat", description: "Systematic investment plans for stocks" },
-  { label: "MTF STOCKS", icon: "trending-up", description: "Margin trading facility stocks" },
   { label: "EVENTS CALENDAR", icon: "calendar", description: "Track corporate events and results" },
 ];
 
-// ─── Ticker Tape Data ───────────────────────────────────
-const tickerTapeRaw = [
-  ...holdings.map(h => ({ ticker: h.ticker, price: h.currentPrice, changePercent: h.dayChangePercent })),
-  ...watchlist.map(w => ({ ticker: w.ticker, price: w.price, changePercent: w.dayChangePercent })),
-];
-// Deduplicate by ticker — holdings take priority
-const tickerSeen = new Set<string>();
-export const tickerTapeItems = tickerTapeRaw.filter(item => {
-  if (tickerSeen.has(item.ticker)) return false;
-  tickerSeen.add(item.ticker);
-  return true;
-});
-
 // ─── User Profile ───────────────────────────────────────
 export const userProfile = {
-  name: "Deepak Aeleni",
-  email: "aeleni@mcse.in",
-  balance: 693.69,
-  joined: "Mar 2024",
+  name: "Demo Investor",
+  email: "demo@mcse.in",
+  balance: 0,
+  joined: "Apr 2026",
   phone: "+91 98765 43210",
   kycStatus: "VERIFIED",
 };
 
 // ─── Portfolio Analysis ─────────────────────────────────
 export const portfolioAnalysis = {
-  currentValue: 487693.69,
-  investedValue: 421500.0,
-  totalReturns: 66193.69,
-  totalReturnsPercent: 15.71,
-  eventReturnPct: 13.29,
+  currentValue: 0,
+  investedValue: 0,
+  totalReturns: 0,
+  totalReturnsPercent: 0,
+  eventReturnPct: 0,
   benchmarkName: "AEON 50",
-  benchmarkAeon50Pct: 2.40,
-  alphaPct: 10.89,
-  sectorAllocation: [
-    { sector: "Education", value: 28.0 },
-    { sector: "Technology", value: 18.5 },
-    { sector: "Automotive", value: 14.4 },
-    { sector: "Media & Entertainment", value: 14.4 },
-    { sector: "Analytics", value: 14.0 },
-    { sector: "Science & Research", value: 10.7 },
-  ],
-  marketCapAllocation: [
-    { cap: "Large Cap", value: 34.6 },
-    { cap: "Mid Cap", value: 49.3 },
-    { cap: "Small Cap", value: 16.1 },
-  ],
-  performanceChart: [
-    { month: "Apr", portfolio: 421500, benchmark: 421500 },
-    { month: "May", portfolio: 428200, benchmark: 423800 },
-    { month: "Jun", portfolio: 435800, benchmark: 425100 },
-    { month: "Jul", portfolio: 441200, benchmark: 428200 },
-    { month: "Aug", portfolio: 438600, benchmark: 426900 },
-    { month: "Sep", portfolio: 449800, benchmark: 429300 },
-    { month: "Oct", portfolio: 458900, benchmark: 431200 },
-    { month: "Nov", portfolio: 465200, benchmark: 428700 },
-    { month: "Dec", portfolio: 472100, benchmark: 430100 },
-    { month: "Jan", portfolio: 478800, benchmark: 429800 },
-    { month: "Feb", portfolio: 482400, benchmark: 431500 },
-    { month: "Mar", portfolio: 487693, benchmark: 431600 },
-  ],
+  benchmarkAeon50Pct: 0,
+  alphaPct: 0,
+  sectorAllocation: [] as { sector: string; value: number }[],
+  marketCapAllocation: [] as { cap: string; value: number }[],
+  performanceChart: [] as { month: string; portfolio: number; benchmark: number }[],
 };
 
 // ─── News Items ─────────────────────────────────────────
@@ -499,68 +345,9 @@ export interface NewsItem {
   dayChangePercent: number;
 }
 
-export const newsItems: NewsItem[] = [
-  {
-    ticker: "MACAD",
-    name: "MathSoc Academy",
-    headline: "MathSoc Academy announces annual inter-college competition with record participation expected from 45+ colleges. Prize pool increased to \u20B950,000.",
-    body: "MathSoc Academy has officially opened registrations for the 2026 edition of its flagship inter-college mathematics competition, MathBattle. This year's event is expected to draw participants from over 45 colleges across the region — a 50% increase from last year's turnout.\n\nThe prize pool has been raised to \u20B950,000, with the top three teams receiving cash awards and internship opportunities with partnered EdTech firms. The competition will feature four rounds: a qualifying online test, a speed-math round, a team-based problem-solving relay, and a final face-off.\n\n\"We've restructured the format to make it more inclusive for first-year students,\" said Rohan Mehra, President of MathSoc Academy. \"We want to identify talent early and give them a platform to shine.\"\n\nRegistrations close on April 22, with the main event scheduled across April 24–26 during the MCSE trading window.",
-    timestamp: Date.now() - 6 * 60 * 1000,
-    price: 1198.50,
-    dayChange: 14.30,
-    dayChangePercent: 1.21,
-  },
-  {
-    ticker: "ECLOUD",
-    name: "Enigma Cloud",
-    headline: "Enigma Cloud completes migration of campus services to its own infrastructure, reducing latency by 40% across all applications.",
-    body: "Enigma Cloud has successfully completed the migration of all major campus applications to its self-managed cloud infrastructure, marking a significant milestone in the club's technical roadmap.\n\nThe migration, which took three months, covered the college's event management platform, attendance tracking system, and collaborative development environments. Early benchmarks show a 40% reduction in average response times and 99.8% uptime since the switch.\n\n\"We were running on shared hosting with unpredictable performance,\" explained Ananya Krishnan, Enigma Cloud's lead architect. \"Now we have full control over scaling, monitoring, and security. It's a fundamentally different experience for end users.\"\n\nThe infrastructure is built on containerised microservices with automated failover. Enigma Cloud plans to open its platform to other college clubs as a managed hosting service by the end of the semester.",
-    timestamp: Date.now() - 23 * 60 * 1000,
-    price: 3215.40,
-    dayChange: -18.60,
-    dayChangePercent: -0.58,
-  },
-  {
-    ticker: "GMAUTO",
-    name: "GM Automotive",
-    headline: "GM Automotive secures sponsorship deal with leading automotive brand for their flagship racing event this April.",
-    body: "GM Automotive has announced a headline sponsorship agreement with a nationally recognised automotive parts manufacturer for the upcoming Grand Prix event scheduled during the MCSE trading days.\n\nThe sponsorship, valued at an undisclosed sum, will cover event logistics, safety equipment upgrades, and a live-streamed broadcast of the race. In return, the sponsor will have branding rights across the event venue and all promotional materials.\n\n\"This is the biggest sponsorship deal Gas Monkeys has ever secured,\" said Vikram Joshi, head of GM Automotive. \"It validates the quality of our engineering and the professionalism of our events.\"\n\nThe Grand Prix will feature both petrol and electric vehicle categories, with teams from eight colleges confirmed to participate. GM Racing, a sibling subsidiary, will field two cars in the competition.",
-    timestamp: Date.now() - 2 * 3600 * 1000,
-    price: 1456.20,
-    dayChange: 17.40,
-    dayChangePercent: 1.21,
-  },
-  {
-    ticker: "CELBIO",
-    name: "Celeste Bio",
-    headline: "Celeste Bio publishes breakthrough findings on algae-based biofuels in a top-tier research journal. Patent filing expected soon.",
-    body: "Celeste BioSystems has published a peer-reviewed paper in the Journal of Sustainable Biotechnology detailing a novel method for extracting biofuel from freshwater algae with 30% higher yield than existing techniques.\n\nThe research, led by Dr. Meera Subramaniam and a team of six undergraduate researchers, uses a proprietary enzymatic process that reduces extraction time from 72 hours to under 18 hours. The team has filed a provisional patent application.\n\n\"This could fundamentally change how campus-scale biofuel production works,\" said Dr. Subramaniam. \"We're already in discussions with two clean-energy incubators about pilot programmes.\"\n\nCeleste Bio's stock has seen increased interest following the announcement, with trading volume up 35% over the past week. The company's parent, Celeste Group, has allocated additional lab space and funding for Phase 2 trials.",
-    timestamp: Date.now() - 5 * 3600 * 1000,
-    price: 2148.60,
-    dayChange: 38.20,
-    dayChangePercent: 1.81,
-  },
-  {
-    ticker: "ENAI",
-    name: "Enigma AI",
-    headline: "Enigma AI lab unveils a new open-source language model trained on college curriculum data, attracting interest from EdTech startups.",
-    body: "Enigma AI's research lab has released CampusLM, an open-source language model fine-tuned on structured curriculum data from over 200 college courses. The model is designed to assist students with concept explanations, problem generation, and study planning.\n\nCampusLM was trained using a custom pipeline built on top of open foundation models, with reinforcement learning from human feedback provided by 50+ student volunteers across three departments.\n\n\"Existing LLMs are great for general knowledge, but they hallucinate on domain-specific academic content,\" said Arjun Reddy, Enigma AI's project lead. \"CampusLM is grounded in verified syllabi and textbook content.\"\n\nThe model has already attracted interest from two EdTech startups looking to integrate it into their platforms. Enigma AI plans to offer a hosted API for campus applications and is exploring a partnership with MathSoc Tech for a mathematics-specific variant.",
-    timestamp: Date.now() - 8 * 3600 * 1000,
-    price: 4512.60,
-    dayChange: 62.80,
-    dayChangePercent: 1.41,
-  },
-  {
-    ticker: "ERPRESS",
-    name: "Erudite Press",
-    headline: "Erudite Press quarterly magazine reaches 10,000 subscribers milestone. Digital edition now available on campus app.",
-    body: "Erudite Press has crossed the 10,000-subscriber mark for its flagship quarterly publication, 'The Erudite Review', making it the most widely read student-run magazine on campus.\n\nThe milestone was reached following the launch of a digital edition accessible through the campus mobile app, which added 3,200 subscribers in the past quarter alone. The digital version features interactive essays, embedded audio readings, and a community discussion section.\n\n\"Print will always be our identity, but digital is how we grow,\" said Kavya Iyer, Editor-in-Chief of Erudite Press. \"The new format lets us include multimedia features that print simply can't support.\"\n\nThe next issue, themed 'Futures', will coincide with the MCSE trading event and will include profiles of all seven parent companies listed on the exchange. Erudite Press is also piloting a writer-in-residence fellowship that will be funded partly through magazine revenue.",
-    timestamp: Date.now() - 12 * 3600 * 1000,
-    price: 342.10,
-    dayChange: 4.90,
-    dayChangePercent: 1.45,
-  },
-];
+// Live news comes from /api/market/news (LLM-generated + company-submitted).
+// This empty array is just a fallback for components that haven't been wired to the API yet.
+export const newsItems: NewsItem[] = [];
 
 export function formatRelativeTime(ts: number): string {
   const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
@@ -618,7 +405,7 @@ function generateChartData(basePrice: number): Record<string, { day: string; pri
   const oneH: { day: string; price: number }[] = [];
   for (let m = 0; m < 60; m++) {
     const mm = String(m).padStart(2, "0");
-    const drift = Math.abs(m - 30) / 30; // mean-revert towards end
+    const drift = Math.abs(m - 30) / 30;
     oneH.push({ day: `10:${mm}`, price: rng(basePrice, 0.006 * (1 - drift * 0.3)) });
   }
   oneH[oneH.length - 1].price = basePrice;
@@ -671,94 +458,221 @@ function generateChartData(basePrice: number): Record<string, { day: string; pri
 }
 
 export const allStocksRaw = [
-  // ── MATHSOC Group ─────────────────────
-  { ticker: "MACAD", name: "MathSoc Academy", price: 1198.50, changePercent: 1.21, parentCompany: "MATHSOC", about: "MathSoc Academy is the education arm of Math Society Group, running coaching programmes, olympiad prep courses, and inter-college quiz competitions. With 500+ enrolled students, it is the largest maths education platform on campus." },
-  { ticker: "MPUB", name: "MathSoc Publishing", price: 685.20, changePercent: 0.64, parentCompany: "MATHSOC", about: "MathSoc Publishing produces academic journals, problem sets, and reference books used across 30+ colleges. Its quarterly journal 'Proof' is considered the gold standard for collegiate mathematics publications." },
-  { ticker: "MTEK", name: "MathSoc Tech", price: 2112.80, changePercent: 1.22, parentCompany: "MATHSOC", about: "MathSoc Tech builds edtech tools including an adaptive problem-solving platform, a LaTeX collaboration editor, and gamified learning apps. Its products serve 2,000+ daily active users." },
   // ── ENIGMA Group ──────────────────────
-  { ticker: "ESOFT", name: "Enigma Software", price: 1842.90, changePercent: -0.56, parentCompany: "ENIGMA", about: "Enigma Software is the development wing of Enigma Group, specialising in open-source projects, competitive programming tools, and campus utility apps. Members have contributed 500+ PRs to major OSS projects." },
-  { ticker: "ECLOUD", name: "Enigma Cloud", price: 3215.40, changePercent: -0.58, parentCompany: "ENIGMA", about: "Enigma Cloud provides cloud infrastructure and hosting services for campus applications. It manages the college's event platform, attendance systems, and collaborative dev environments." },
-  { ticker: "ENAI", name: "Enigma AI", price: 4512.60, changePercent: 1.41, parentCompany: "ENIGMA", about: "Enigma AI is the artificial intelligence research lab of Enigma Group. It builds ML models for campus analytics, runs AI workshops, and has published papers at collegiate AI conferences." },
-  // ── GASMONKEYS Group ──────────────────
-  { ticker: "GMRACE", name: "GM Racing", price: 892.30, changePercent: -0.74, parentCompany: "GASMONKEYS", about: "GM Racing is the competitive motorsport division of Gas Monkeys Group. The team builds go-karts and electric vehicles for national-level racing events, with multiple podium finishes." },
-  { ticker: "GMAUTO", name: "GM Automotive", price: 1456.20, changePercent: 1.21, parentCompany: "GASMONKEYS", about: "GM Automotive designs and fabricates custom automotive components and aftermarket parts. The workshop serves the campus fleet and external clients with precision machining." },
-  { ticker: "GMSERV", name: "GM Services", price: 562.80, changePercent: -0.44, parentCompany: "GASMONKEYS", about: "GM Services provides maintenance, repair, and technical consultation for campus vehicles and equipment. It runs a fully equipped service bay and a mobile repair unit." },
-  // ── MASTERSHOT Group ──────────────────
-  { ticker: "MSSTD", name: "MS Studios", price: 1087.30, changePercent: 0.75, parentCompany: "MASTERSHOT", about: "MS Studios is the film production division of MasterShot Group. It produces short films, documentaries, and covers all major campus events. Its annual film festival attracts entries from 50+ colleges." },
-  { ticker: "MSDIGI", name: "MS Digital", price: 785.40, changePercent: 0.72, parentCompany: "MASTERSHOT", about: "MS Digital handles digital content creation — podcasts, social media campaigns, and digital marketing for campus organisations. It manages 15+ social channels with 100K+ combined followers." },
-  { ticker: "MSMEDIA", name: "MS Media", price: 1352.70, changePercent: 0.48, parentCompany: "MASTERSHOT", about: "MS Media is the distribution and broadcasting arm of MasterShot Group. It operates the campus streaming platform, manages rights licensing, and runs the college radio station." },
+  { ticker: "ESOFT",  name: "Enigma Software",  price: 2990, changePercent: 0, parentCompany: "ENIGMA",  about: "Enigma Software is the flagship development arm of Enigma Group, specialising in enterprise platforms, competitive programming tools, and large-scale open-source contributions." },
+  { ticker: "ECLOUD", name: "Enigma Cloud",     price: 1720, changePercent: 0, parentCompany: "ENIGMA",  about: "Enigma Cloud provides managed cloud infrastructure and hosting services powering campus applications and partner workloads." },
+  { ticker: "ENAI",   name: "Enigma AI",        price: 875,  changePercent: 0, parentCompany: "ENIGMA",  about: "Enigma AI is the emerging artificial intelligence research lab of Enigma Group, building ML models and open-source language tools." },
   // ── ERUDITE Group ─────────────────────
-  { ticker: "ERLEARN", name: "Erudite Learn", price: 618.70, changePercent: -0.79, parentCompany: "ERUDITE", about: "Erudite Learn is the online learning platform of Erudite Group, offering courses in debate, public speaking, and critical thinking. It hosts weekly workshops and Model UN preparation sessions." },
-  { ticker: "ERPRESS", name: "Erudite Press", price: 342.10, changePercent: 1.45, parentCompany: "ERUDITE", about: "Erudite Press is the publishing house of Erudite Group. It publishes a quarterly literary magazine, curates the campus book exchange programme, and runs a writer-in-residence fellowship." },
-  { ticker: "ERLAB", name: "Erudite Labs", price: 891.50, changePercent: 0.82, parentCompany: "ERUDITE", about: "Erudite Labs is the research division of Erudite Group, conducting studies in linguistics, cognitive science, and educational psychology. It has published 12 papers in peer-reviewed journals." },
-  // ── INSIGHT Group ─────────────────────
-  { ticker: "INDATA", name: "Insight Data", price: 282.45, changePercent: 1.18, parentCompany: "INSIGHT", about: "Insight Data is the analytics arm of Insight Group, building dashboards, running data competitions, and providing pro-bono data consulting to startups and NGOs on campus." },
-  { ticker: "INMKT", name: "Insight Markets", price: 428.90, changePercent: -0.35, parentCompany: "INSIGHT", about: "Insight Markets conducts market research and consumer behaviour studies for campus businesses. It publishes the bi-monthly 'Campus Pulse' report tracking student spending trends." },
-  { ticker: "INCON", name: "Insight Consulting", price: 192.40, changePercent: 0.94, parentCompany: "INSIGHT", about: "Insight Consulting offers advisory services to student-run startups and college clubs. It has advised on 30+ business plans and helped secure \u20B92L+ in seed funding for campus ventures." },
-  // ── CELESTE Group ─────────────────────
-  { ticker: "CELRES", name: "Celeste Research", price: 984.20, changePercent: 1.28, parentCompany: "CELESTE", about: "Celeste Research is the space science division of Celeste Group, operating the campus observatory and contributing to citizen science projects. It has published observational data in international journals." },
-  { ticker: "CELENR", name: "Celeste Energy", price: 1542.80, changePercent: 0.95, parentCompany: "CELESTE", about: "Celeste Energy focuses on clean energy research — solar panel optimisation, wind tunnel experiments, and campus sustainability initiatives. It reduced campus energy costs by 12% last year." },
-  { ticker: "CELBIO", name: "Celeste Bio", price: 2148.60, changePercent: 1.81, parentCompany: "CELESTE", about: "Celeste BioSystems is the biotechnology arm of Celeste Group, conducting research in algae-based biofuels, water purification, and bioinformatics. Three patents pending for novel purification methods." },
+  { ticker: "ERLEARN", name: "Erudite Learn",  price: 985,  changePercent: 0, parentCompany: "ERUDITE", about: "Erudite Learn is the flagship online learning platform of Erudite Group, offering courses in debate, communication, and critical thinking." },
+  { ticker: "ERPRESS", name: "Erudite Press",  price: 565,  changePercent: 0, parentCompany: "ERUDITE", about: "Erudite Press is the publishing house of Erudite Group, running a quarterly literary magazine and writer-in-residence fellowship." },
+  { ticker: "ERLAB",   name: "Erudite Labs",   price: 280,  changePercent: 0, parentCompany: "ERUDITE", about: "Erudite Labs is the emerging research division of Erudite Group, working at the intersection of linguistics, cognition, and digital media." },
+  // ── MARC Group ────────────────────────
+  { ticker: "MARCF", name: "MARC Finance",    price: 1795, changePercent: 0, parentCompany: "MARC", about: "MARC Finance is the flagship financial advisory unit of MARC Group, serving corporate clients with capital advisory and treasury services." },
+  { ticker: "MARCM", name: "MARC Markets",    price: 1020, changePercent: 0, parentCompany: "MARC", about: "MARC Markets provides market research, trading intelligence, and analytics products for institutional and retail clients." },
+  { ticker: "MARCC", name: "MARC Consulting", price: 500,  changePercent: 0, parentCompany: "MARC", about: "MARC Consulting is the emerging management advisory arm, advising on strategy, operations, and transformation engagements." },
+  // ── AMBROSIA Group ────────────────────
+  { ticker: "AMBR", name: "Ambrosia Restaurants", price: 690, changePercent: 0, parentCompany: "AMBROSIA", about: "Ambrosia Restaurants operates AEON's flagship upscale casual-dining chain, beloved for curated menus and signature experiences." },
+  { ticker: "AMBF", name: "Ambrosia Fresh",       price: 385, changePercent: 0, parentCompany: "AMBROSIA", about: "Ambrosia Fresh is the food-tech and delivery platform of Ambrosia Group, offering subscription meals and premium grocery." },
+  { ticker: "AMBL", name: "Ambrosia Luxe",        price: 190, changePercent: 0, parentCompany: "AMBROSIA", about: "Ambrosia Luxe is the emerging luxury dining and private events brand of Ambrosia Group." },
+  // ── ROBOVERSE Group ───────────────────
+  { ticker: "RBVX", name: "Roboverse Systems",       price: 2260, changePercent: 0, parentCompany: "ROBOVERSE", about: "Roboverse Systems is the flagship defense robotics division, building autonomous combat and surveillance platforms." },
+  { ticker: "RBVM", name: "Roboverse Manufacturing", price: 1275, changePercent: 0, parentCompany: "ROBOVERSE", about: "Roboverse Manufacturing runs the group's precision robotics fabrication plants and supplies systems-grade components." },
+  { ticker: "RBVA", name: "Roboverse AI",            price: 850,  changePercent: 0, parentCompany: "ROBOVERSE", about: "Roboverse AI is the emerging AI brain behind Roboverse's platforms, focused on perception, planning, and autonomy." },
+  // ── COGNITIA Group ────────────────────
+  { ticker: "CGNR", name: "Cognitia Research",  price: 2850, changePercent: 0, parentCompany: "COGNITIA", about: "Cognitia Research is the flagship AI research lab of Cognitia Group, publishing at top venues and licensing enterprise IP." },
+  { ticker: "CGNA", name: "Cognitia Analytics", price: 1630, changePercent: 0, parentCompany: "COGNITIA", about: "Cognitia Analytics delivers behavioural analytics and decision-intelligence platforms to enterprise and government clients." },
+  { ticker: "CGNX", name: "Cognitia X",         price: 810,  changePercent: 0, parentCompany: "COGNITIA", about: "Cognitia X is the emerging moonshot arm of Cognitia Group, incubating next-generation intelligent products." },
+  // ── GASMONKEYS Group ──────────────────
+  { ticker: "GMRACE", name: "GM Racing",     price: 1390, changePercent: 0, parentCompany: "GASMONKEYS", about: "GM Racing is the flagship formula motorsport team of Gas Monkeys Group, fielding cars at national-level circuits." },
+  { ticker: "GMAUTO", name: "GM Automotive", price: 805,  changePercent: 0, parentCompany: "GASMONKEYS", about: "GM Automotive is the parts manufacturing plant of Gas Monkeys, producing precision automotive components at scale." },
+  { ticker: "GMSERV", name: "GM Services",   price: 395,  changePercent: 0, parentCompany: "GASMONKEYS", about: "GM Services is the emerging vehicle servicing network of Gas Monkeys, running service bays and mobile repair units." },
+  // ── LINCOLNLABS Group ─────────────────
+  { ticker: "LLMED", name: "Lincoln Medical",  price: 2555, changePercent: 0, parentCompany: "LINCOLNLABS", about: "Lincoln Medical is the flagship medical devices division of Lincoln Labs, selling diagnostic and therapeutic devices to hospitals." },
+  { ticker: "LLRES", name: "Lincoln Research", price: 1465, changePercent: 0, parentCompany: "LINCOLNLABS", about: "Lincoln Research is the pharmaceutical R&D arm, running discovery and late-stage trials across multiple therapy areas." },
+  { ticker: "LLBIO", name: "Lincoln Bio",      price: 720,  changePercent: 0, parentCompany: "LINCOLNLABS", about: "Lincoln Bio is the emerging biotech innovation unit, working on cell and gene therapies and precision bio-platforms." },
+  // ── AERO Group ────────────────────────
+  { ticker: "AEROD", name: "Aero Drones",     price: 2230, changePercent: 0, parentCompany: "AERO", about: "Aero Drones is the flagship autonomous drone division, delivering defense and civilian UAV platforms at scale." },
+  { ticker: "AEROP", name: "Aero Propulsion", price: 1275, changePercent: 0, parentCompany: "AERO", about: "Aero Propulsion designs and manufactures advanced propulsion units for aerospace and defense applications." },
+  { ticker: "AEROS", name: "Aero Systems",    price: 625,  changePercent: 0, parentCompany: "AERO", about: "Aero Systems is the emerging integrated avionics unit, building flight-control and sensor-fusion systems." },
+  // ── APEXPMI Group ─────────────────────
+  { ticker: "APXF", name: "Apex Finance",        price: 1725, changePercent: 0, parentCompany: "APEXPMI", about: "Apex Finance is the flagship project and structured finance division of Apex PMI Group." },
+  { ticker: "APXI", name: "Apex Infrastructure", price: 995,  changePercent: 0, parentCompany: "APEXPMI", about: "Apex Infrastructure finances and manages infrastructure projects across transport, energy, and urban development." },
+  { ticker: "APXM", name: "Apex Management",     price: 495,  changePercent: 0, parentCompany: "APEXPMI", about: "Apex Management is the emerging investment management arm, running discretionary portfolios for select clients." },
+  // ── ACM Group ─────────────────────────
+  { ticker: "ACMR", name: "ACM Research", price: 2815, changePercent: 0, parentCompany: "ACM", about: "ACM Research is the flagship applied computing research lab, shipping peer-reviewed work and enterprise-grade IP." },
+  { ticker: "ACMS", name: "ACM Software", price: 1605, changePercent: 0, parentCompany: "ACM", about: "ACM Software builds the group's enterprise software platforms used across AEON's institutions." },
+  { ticker: "ACMD", name: "ACM Data",     price: 810,  changePercent: 0, parentCompany: "ACM", about: "ACM Data is the emerging data-science platform arm of ACM Group, delivering analytics and ML infrastructure." },
+  // ── ADVENTURE Group ───────────────────
+  { ticker: "ADVT", name: "Adventure Tourism",    price: 670, changePercent: 0, parentCompany: "ADVENTURE", about: "Adventure Tourism runs the flagship outdoor tourism circuits and curated adventure trips of Adventure Group." },
+  { ticker: "ADVS", name: "Adventure Sports",     price: 385, changePercent: 0, parentCompany: "ADVENTURE", about: "Adventure Sports is the sports equipment and apparel brand of Adventure Group, sold both online and at owned stores." },
+  { ticker: "ADVX", name: "Adventure Experience", price: 190, changePercent: 0, parentCompany: "ADVENTURE", about: "Adventure Experience is the emerging experience-parks arm, building immersive outdoor-themed destinations." },
+  // ── AUV Group ─────────────────────────
+  { ticker: "AUVS", name: "AUV Systems",  price: 2120, changePercent: 0, parentCompany: "AUV", about: "AUV Systems is the flagship autonomous underwater vehicle division, selling defense-grade platforms to government buyers." },
+  { ticker: "AUVR", name: "AUV Research", price: 1205, changePercent: 0, parentCompany: "AUV", about: "AUV Research is the deep-sea exploration and research arm, operating scientific platforms for public and private clients." },
+  { ticker: "AUVM", name: "AUV Marine",   price: 590,  changePercent: 0, parentCompany: "AUV", about: "AUV Marine is the emerging marine-infrastructure monitoring arm, inspecting pipelines, cables, and offshore assets." },
+  // ── MEDIA Group ───────────────────────
+  { ticker: "MEDP", name: "Media Productions", price: 960, changePercent: 0, parentCompany: "MEDIA", about: "Media Productions is the flagship film and TV production studio of Media Group." },
+  { ticker: "MEDD", name: "Media Digital",     price: 550, changePercent: 0, parentCompany: "MEDIA", about: "Media Digital runs the group's digital content network and short-form video channels." },
+  { ticker: "MEDB", name: "Media Broadcast",   price: 270, changePercent: 0, parentCompany: "MEDIA", about: "Media Broadcast is the emerging multi-channel broadcast platform of Media Group." },
+  // ── AEIFORIA Group ────────────────────
+  { ticker: "AEIF", name: "Aeiforia Fashion",   price: 660, changePercent: 0, parentCompany: "AEIFORIA", about: "Aeiforia Fashion is the flagship fashion house, curating seasonal collections and couture lines for discerning customers." },
+  { ticker: "AEIA", name: "Aeiforia Arts",      price: 510, changePercent: 0, parentCompany: "AEIFORIA", about: "Aeiforia Arts is the arts collective and gallery arm, running exhibitions, editions, and artist residencies." },
+  { ticker: "AEIL", name: "Aeiforia Lifestyle", price: 190, changePercent: 0, parentCompany: "AEIFORIA", about: "Aeiforia Lifestyle is the emerging luxury-lifestyle brand, covering home, wellness, and accessories categories." },
+  // ── QUBIT Group ───────────────────────
+  { ticker: "QBTR", name: "Qubit Research",   price: 3095, changePercent: 0, parentCompany: "QUBIT", about: "Qubit Research is the flagship quantum computing research lab, pushing the frontier on hardware and error correction." },
+  { ticker: "QBTS", name: "Qubit Software",   price: 1760, changePercent: 0, parentCompany: "QUBIT", about: "Qubit Software builds quantum-ready compilers, libraries, and middleware for enterprises exploring quantum workloads." },
+  { ticker: "QBTC", name: "Qubit Consulting", price: 875,  changePercent: 0, parentCompany: "QUBIT", about: "Qubit Consulting is the emerging advisory arm, helping enterprises plan their quantum transition roadmap." },
+  // ── MASTERSHOT Group ──────────────────
+  { ticker: "MSSTD",   name: "MasterShot Studios", price: 1010, changePercent: 0, parentCompany: "MASTERSHOT", about: "MasterShot Studios is the flagship film production studio of MasterShot Group, producing features, shorts, and series." },
+  { ticker: "MSDIGI",  name: "MasterShot Digital", price: 580,  changePercent: 0, parentCompany: "MASTERSHOT", about: "MasterShot Digital runs the group's digital content, streaming channels, and social-media-first originals." },
+  { ticker: "MSMEDIA", name: "MasterShot Media",   price: 290,  changePercent: 0, parentCompany: "MASTERSHOT", about: "MasterShot Media is the emerging media distribution and rights-licensing platform of MasterShot Group." },
+  // ── EIC Group ─────────────────────────
+  { ticker: "EICF", name: "EIC Finance",     price: 1700, changePercent: 0, parentCompany: "EIC", about: "EIC Finance is the flagship early-stage venture finance arm, funding AEON-born startups from seed to Series B." },
+  { ticker: "EICI", name: "EIC Investments", price: 965,  changePercent: 0, parentCompany: "EIC", about: "EIC Investments is the growth-stage investment manager of EIC Group, backing scaling companies with follow-on capital." },
+  { ticker: "EICM", name: "EIC Management",  price: 470,  changePercent: 0, parentCompany: "EIC", about: "EIC Management is the emerging innovation-management advisory arm, partnering with corporates on venture-building." },
+  // ── SYNOLO Group ──────────────────────
+  { ticker: "SYNS", name: "Synolo Studios",     price: 900, changePercent: 0, parentCompany: "SYNOLO", about: "Synolo Studios is the flagship live-events and immersive experience studio of Synolo Group." },
+  { ticker: "SYNP", name: "Synolo Productions", price: 510, changePercent: 0, parentCompany: "SYNOLO", about: "Synolo Productions is the label arm, producing albums, podcasts, and audio-first originals." },
+  { ticker: "SYNI", name: "Synolo Innovation",  price: 255, changePercent: 0, parentCompany: "SYNOLO", about: "Synolo Innovation is the emerging cross-sector innovation arm, prototyping tech-meets-culture products." },
 ];
 
-const stockFundamentals: Record<string, StockFundamentals> = {
-  // MATHSOC subs
-  MACAD:  { marketCap: "6.0Cr", pe: 24.8, eps: 48.33, bookValue: 820.0, roe: 17.6, w52High: 1380.0, w52Low: 780.0, volume: "9.4M", avgVolume: "7.8M", sector: "Education" },
-  MPUB:   { marketCap: "3.4Cr", pe: 18.2, eps: 37.65, bookValue: 480.0, roe: 14.2, w52High: 760.0, w52Low: 420.0, volume: "5.2M", avgVolume: "4.6M", sector: "Education" },
-  MTEK:   { marketCap: "10.6Cr", pe: 32.6, eps: 64.81, bookValue: 1540.0, roe: 20.8, w52High: 2350.0, w52Low: 1450.0, volume: "6.8M", avgVolume: "5.4M", sector: "Technology" },
-  // ENIGMA subs
-  ESOFT:  { marketCap: "9.2Cr", pe: 28.4, eps: 64.89, bookValue: 1280.0, roe: 21.2, w52High: 2100.0, w52Low: 1280.0, volume: "8.2M", avgVolume: "7.1M", sector: "Technology" },
-  ECLOUD: { marketCap: "16.1Cr", pe: 36.8, eps: 87.37, bookValue: 2200.0, roe: 23.5, w52High: 3600.0, w52Low: 2150.0, volume: "5.4M", avgVolume: "4.8M", sector: "Technology" },
-  ENAI:   { marketCap: "22.6Cr", pe: 42.1, eps: 107.19, bookValue: 3100.0, roe: 25.8, w52High: 4800.0, w52Low: 2900.0, volume: "4.1M", avgVolume: "3.6M", sector: "Technology" },
-  // GASMONKEYS subs
-  GMRACE: { marketCap: "4.5Cr", pe: 16.2, eps: 55.08, bookValue: 620.0, roe: 13.8, w52High: 980.0, w52Low: 580.0, volume: "7.3M", avgVolume: "6.2M", sector: "Automotive" },
-  GMAUTO: { marketCap: "7.3Cr", pe: 19.4, eps: 75.06, bookValue: 980.0, roe: 16.2, w52High: 1620.0, w52Low: 920.0, volume: "8.8M", avgVolume: "7.4M", sector: "Automotive" },
-  GMSERV: { marketCap: "2.8Cr", pe: 12.8, eps: 43.97, bookValue: 380.0, roe: 11.4, w52High: 640.0, w52Low: 350.0, volume: "6.1M", avgVolume: "5.2M", sector: "Automotive" },
-  // MASTERSHOT subs
-  MSSTD:  { marketCap: "5.4Cr", pe: 22.6, eps: 48.11, bookValue: 740.0, roe: 17.8, w52High: 1240.0, w52Low: 720.0, volume: "6.5M", avgVolume: "5.6M", sector: "Media & Entertainment" },
-  MSDIGI: { marketCap: "3.9Cr", pe: 17.4, eps: 45.14, bookValue: 540.0, roe: 15.2, w52High: 860.0, w52Low: 520.0, volume: "9.4M", avgVolume: "8.1M", sector: "Media & Entertainment" },
-  MSMEDIA:{ marketCap: "6.8Cr", pe: 26.2, eps: 51.63, bookValue: 920.0, roe: 18.6, w52High: 1520.0, w52Low: 880.0, volume: "4.8M", avgVolume: "4.2M", sector: "Media & Entertainment" },
-  // ERUDITE subs
-  ERLEARN:{ marketCap: "3.1Cr", pe: 15.8, eps: 39.16, bookValue: 420.0, roe: 16.4, w52High: 720.0, w52Low: 380.0, volume: "10.1M", avgVolume: "8.6M", sector: "Education" },
-  ERPRESS:{ marketCap: "1.7Cr", pe: 11.4, eps: 30.01, bookValue: 240.0, roe: 19.2, w52High: 380.0, w52Low: 210.0, volume: "11.2M", avgVolume: "9.4M", sector: "Education" },
-  ERLAB:  { marketCap: "4.5Cr", pe: 21.8, eps: 40.90, bookValue: 620.0, roe: 18.8, w52High: 1020.0, w52Low: 580.0, volume: "5.8M", avgVolume: "4.9M", sector: "Science & Research" },
-  // INSIGHT subs
-  INDATA: { marketCap: "1.4Cr", pe: 10.8, eps: 26.15, bookValue: 195.0, roe: 22.4, w52High: 320.0, w52Low: 175.0, volume: "15.3M", avgVolume: "12.8M", sector: "Analytics" },
-  INMKT:  { marketCap: "2.1Cr", pe: 14.6, eps: 29.38, bookValue: 310.0, roe: 18.2, w52High: 490.0, w52Low: 280.0, volume: "7.8M", avgVolume: "6.5M", sector: "Analytics" },
-  INCON:  { marketCap: "0.96Cr", pe: 8.4, eps: 22.90, bookValue: 140.0, roe: 20.6, w52High: 225.0, w52Low: 120.0, volume: "12.4M", avgVolume: "10.2M", sector: "Analytics" },
-  // CELESTE subs
-  CELRES: { marketCap: "4.9Cr", pe: 24.6, eps: 40.01, bookValue: 680.0, roe: 16.8, w52High: 1080.0, w52Low: 650.0, volume: "5.5M", avgVolume: "4.7M", sector: "Science & Research" },
-  CELENR: { marketCap: "7.7Cr", pe: 29.8, eps: 51.77, bookValue: 1040.0, roe: 17.4, w52High: 1720.0, w52Low: 980.0, volume: "4.6M", avgVolume: "3.9M", sector: "Energy" },
-  CELBIO: { marketCap: "10.7Cr", pe: 35.4, eps: 60.69, bookValue: 1480.0, roe: 19.8, w52High: 2380.0, w52Low: 1350.0, volume: "6.2M", avgVolume: "5.3M", sector: "Science & Research" },
+// Fundamentals built from seed.ts values.
+// Financial seed numbers are in thousands of \u20B9; shares are in thousands.
+// marketCap is displayed as Cr (crore) = (price * sharesOut) / 1e7.
+type SeedRow = {
+  ticker: string;
+  sector: string;
+  pq: number; bs: number; cs: number;
+  revenue: number; expenses: number;
+  assets: number; liabilities: number;
+  employees: number; shares: number;
 };
+
+const SEED_ROWS: SeedRow[] = [
+  { ticker: "ESOFT",  sector: "Technology",      pq: 85, bs: 82, cs: 80, revenue: 450000, expenses: 320000, assets: 310000, liabilities: 180000, employees: 850, shares: 10000 },
+  { ticker: "ECLOUD", sector: "Technology",      pq: 78, bs: 74, cs: 76, revenue: 280000, expenses: 210000, assets: 220000, liabilities: 140000, employees: 520, shares: 8000 },
+  { ticker: "ENAI",   sector: "Technology",      pq: 72, bs: 68, cs: 70, revenue: 120000, expenses: 110000, assets: 120000, liabilities: 70000,  employees: 280, shares: 5000 },
+  { ticker: "ERLEARN", sector: "Media",          pq: 82, bs: 78, cs: 84, revenue: 180000, expenses: 130000, assets: 180000, liabilities: 100000, employees: 420, shares: 6000 },
+  { ticker: "ERPRESS", sector: "Media",          pq: 75, bs: 72, cs: 77, revenue: 90000,  expenses: 72000,  assets: 95000,  liabilities: 55000,  employees: 210, shares: 4000 },
+  { ticker: "ERLAB",   sector: "Media",          pq: 68, bs: 62, cs: 65, revenue: 40000,  expenses: 38000,  assets: 55000,  liabilities: 30000,  employees: 110, shares: 3000 },
+  { ticker: "MARCF", sector: "Finance",          pq: 80, bs: 77, cs: 78, revenue: 320000, expenses: 240000, assets: 280000, liabilities: 160000, employees: 620, shares: 7500 },
+  { ticker: "MARCM", sector: "Finance",          pq: 73, bs: 70, cs: 72, revenue: 175000, expenses: 140000, assets: 160000, liabilities: 95000,  employees: 340, shares: 5000 },
+  { ticker: "MARCC", sector: "Finance",          pq: 65, bs: 62, cs: 67, revenue: 80000,  expenses: 68000,  assets: 85000,  liabilities: 50000,  employees: 180, shares: 3500 },
+  { ticker: "AMBR", sector: "Consumer Goods",    pq: 78, bs: 75, cs: 82, revenue: 140000, expenses: 110000, assets: 130000, liabilities: 75000,  employees: 380, shares: 5000 },
+  { ticker: "AMBF", sector: "Consumer Goods",    pq: 70, bs: 68, cs: 73, revenue: 70000,  expenses: 60000,  assets: 72000,  liabilities: 42000,  employees: 200, shares: 3500 },
+  { ticker: "AMBL", sector: "Consumer Goods",    pq: 62, bs: 65, cs: 60, revenue: 30000,  expenses: 28000,  assets: 38000,  liabilities: 22000,  employees: 90,  shares: 2500 },
+  { ticker: "RBVX", sector: "Defense",           pq: 83, bs: 79, cs: 76, revenue: 380000, expenses: 280000, assets: 350000, liabilities: 200000, employees: 720, shares: 8000 },
+  { ticker: "RBVM", sector: "Defense",           pq: 75, bs: 71, cs: 69, revenue: 210000, expenses: 165000, assets: 210000, liabilities: 120000, employees: 480, shares: 6000 },
+  { ticker: "RBVA", sector: "Technology",        pq: 70, bs: 66, cs: 68, revenue: 85000,  expenses: 80000,  assets: 105000, liabilities: 60000,  employees: 210, shares: 4000 },
+  { ticker: "CGNR", sector: "Technology",        pq: 81, bs: 78, cs: 75, revenue: 310000, expenses: 240000, assets: 310000, liabilities: 175000, employees: 680, shares: 7500 },
+  { ticker: "CGNA", sector: "Technology",        pq: 74, bs: 72, cs: 71, revenue: 180000, expenses: 145000, assets: 190000, liabilities: 110000, employees: 400, shares: 5500 },
+  { ticker: "CGNX", sector: "Technology",        pq: 67, bs: 64, cs: 65, revenue: 60000,  expenses: 58000,  assets: 80000,  liabilities: 45000,  employees: 160, shares: 3000 },
+  { ticker: "GMRACE", sector: "Automotive",      pq: 79, bs: 82, cs: 78, revenue: 250000, expenses: 195000, assets: 240000, liabilities: 140000, employees: 550, shares: 6500 },
+  { ticker: "GMAUTO", sector: "Automotive",      pq: 73, bs: 70, cs: 72, revenue: 150000, expenses: 122000, assets: 155000, liabilities: 90000,  employees: 380, shares: 5000 },
+  { ticker: "GMSERV", sector: "Automotive",      pq: 65, bs: 63, cs: 68, revenue: 65000,  expenses: 57000,  assets: 70000,  liabilities: 40000,  employees: 200, shares: 3500 },
+  { ticker: "LLMED", sector: "Pharmaceutical",   pq: 84, bs: 80, cs: 83, revenue: 420000, expenses: 310000, assets: 420000, liabilities: 230000, employees: 780, shares: 9000 },
+  { ticker: "LLRES", sector: "Pharmaceutical",   pq: 77, bs: 74, cs: 76, revenue: 220000, expenses: 175000, assets: 240000, liabilities: 135000, employees: 450, shares: 6000 },
+  { ticker: "LLBIO", sector: "Pharmaceutical",   pq: 69, bs: 66, cs: 70, revenue: 85000,  expenses: 80000,  assets: 110000, liabilities: 60000,  employees: 200, shares: 3500 },
+  { ticker: "AEROD", sector: "Defense",          pq: 82, bs: 78, cs: 74, revenue: 360000, expenses: 270000, assets: 360000, liabilities: 205000, employees: 700, shares: 8000 },
+  { ticker: "AEROP", sector: "Defense",          pq: 75, bs: 72, cs: 70, revenue: 195000, expenses: 158000, assets: 210000, liabilities: 120000, employees: 420, shares: 5500 },
+  { ticker: "AEROS", sector: "Defense",          pq: 67, bs: 64, cs: 65, revenue: 75000,  expenses: 70000,  assets: 90000,  liabilities: 52000,  employees: 190, shares: 3500 },
+  { ticker: "APXF", sector: "Finance",           pq: 77, bs: 74, cs: 76, revenue: 290000, expenses: 225000, assets: 285000, liabilities: 165000, employees: 580, shares: 7000 },
+  { ticker: "APXI", sector: "Finance",           pq: 71, bs: 68, cs: 70, revenue: 155000, expenses: 128000, assets: 160000, liabilities: 92000,  employees: 320, shares: 5000 },
+  { ticker: "APXM", sector: "Finance",           pq: 64, bs: 61, cs: 65, revenue: 68000,  expenses: 60000,  assets: 78000,  liabilities: 45000,  employees: 165, shares: 3000 },
+  { ticker: "ACMR", sector: "Technology",        pq: 80, bs: 76, cs: 74, revenue: 290000, expenses: 225000, assets: 295000, liabilities: 170000, employees: 640, shares: 7500 },
+  { ticker: "ACMS", sector: "Technology",        pq: 73, bs: 70, cs: 71, revenue: 165000, expenses: 135000, assets: 175000, liabilities: 100000, employees: 380, shares: 5000 },
+  { ticker: "ACMD", sector: "Technology",        pq: 67, bs: 64, cs: 66, revenue: 65000,  expenses: 61000,  assets: 85000,  liabilities: 48000,  employees: 175, shares: 3000 },
+  { ticker: "ADVT", sector: "Consumer Goods",    pq: 76, bs: 72, cs: 80, revenue: 125000, expenses: 98000,  assets: 120000, liabilities: 68000,  employees: 340, shares: 4500 },
+  { ticker: "ADVS", sector: "Consumer Goods",    pq: 70, bs: 68, cs: 73, revenue: 62000,  expenses: 54000,  assets: 65000,  liabilities: 38000,  employees: 175, shares: 3500 },
+  { ticker: "ADVX", sector: "Consumer Goods",    pq: 62, bs: 60, cs: 65, revenue: 28000,  expenses: 26000,  assets: 34000,  liabilities: 20000,  employees: 85,  shares: 2500 },
+  { ticker: "AUVS", sector: "Defense",           pq: 78, bs: 74, cs: 72, revenue: 310000, expenses: 245000, assets: 310000, liabilities: 180000, employees: 620, shares: 7000 },
+  { ticker: "AUVR", sector: "Defense",           pq: 71, bs: 68, cs: 67, revenue: 165000, expenses: 138000, assets: 175000, liabilities: 100000, employees: 360, shares: 5000 },
+  { ticker: "AUVM", sector: "Defense",           pq: 63, bs: 60, cs: 62, revenue: 62000,  expenses: 59000,  assets: 78000,  liabilities: 45000,  employees: 160, shares: 3000 },
+  { ticker: "MEDP", sector: "Media",             pq: 80, bs: 78, cs: 77, revenue: 210000, expenses: 165000, assets: 210000, liabilities: 120000, employees: 500, shares: 6500 },
+  { ticker: "MEDD", sector: "Media",             pq: 73, bs: 71, cs: 74, revenue: 110000, expenses: 90000,  assets: 115000, liabilities: 65000,  employees: 270, shares: 4500 },
+  { ticker: "MEDB", sector: "Media",             pq: 65, bs: 63, cs: 67, revenue: 48000,  expenses: 43000,  assets: 55000,  liabilities: 32000,  employees: 130, shares: 3000 },
+  { ticker: "AEIF", sector: "Consumer Goods",    pq: 75, bs: 78, cs: 73, revenue: 115000, expenses: 90000,  assets: 112000, liabilities: 62000,  employees: 310, shares: 4500 },
+  { ticker: "AEIA", sector: "Media",             pq: 68, bs: 72, cs: 70, revenue: 58000,  expenses: 50000,  assets: 65000,  liabilities: 37000,  employees: 155, shares: 3500 },
+  { ticker: "AEIL", sector: "Consumer Goods",    pq: 62, bs: 65, cs: 60, revenue: 26000,  expenses: 24000,  assets: 32000,  liabilities: 18000,  employees: 80,  shares: 2500 },
+  { ticker: "QBTR", sector: "Technology",        pq: 88, bs: 82, cs: 78, revenue: 480000, expenses: 360000, assets: 490000, liabilities: 270000, employees: 880, shares: 10000 },
+  { ticker: "QBTS", sector: "Technology",        pq: 80, bs: 76, cs: 75, revenue: 255000, expenses: 200000, assets: 270000, liabilities: 155000, employees: 520, shares: 7000 },
+  { ticker: "QBTC", sector: "Technology",        pq: 72, bs: 68, cs: 70, revenue: 100000, expenses: 92000,  assets: 115000, liabilities: 65000,  employees: 240, shares: 4000 },
+  { ticker: "MSSTD",   sector: "Media",          pq: 84, bs: 82, cs: 80, revenue: 240000, expenses: 185000, assets: 240000, liabilities: 138000, employees: 560, shares: 7000 },
+  { ticker: "MSDIGI",  sector: "Media",          pq: 77, bs: 75, cs: 76, revenue: 125000, expenses: 102000, assets: 130000, liabilities: 75000,  employees: 290, shares: 4500 },
+  { ticker: "MSMEDIA", sector: "Media",          pq: 70, bs: 68, cs: 70, revenue: 55000,  expenses: 49000,  assets: 62000,  liabilities: 36000,  employees: 145, shares: 3500 },
+  { ticker: "EICF", sector: "Finance",           pq: 76, bs: 73, cs: 75, revenue: 260000, expenses: 205000, assets: 265000, liabilities: 152000, employees: 520, shares: 6500 },
+  { ticker: "EICI", sector: "Finance",           pq: 69, bs: 66, cs: 68, revenue: 138000, expenses: 115000, assets: 145000, liabilities: 83000,  employees: 280, shares: 4500 },
+  { ticker: "EICM", sector: "Finance",           pq: 61, bs: 58, cs: 62, revenue: 55000,  expenses: 50000,  assets: 62000,  liabilities: 36000,  employees: 140, shares: 3000 },
+  { ticker: "SYNS", sector: "Media",             pq: 75, bs: 73, cs: 77, revenue: 155000, expenses: 125000, assets: 155000, liabilities: 88000,  employees: 365, shares: 5500 },
+  { ticker: "SYNP", sector: "Media",             pq: 68, bs: 66, cs: 70, revenue: 78000,  expenses: 67000,  assets: 82000,  liabilities: 46000,  employees: 195, shares: 4000 },
+  { ticker: "SYNI", sector: "Technology",        pq: 62, bs: 60, cs: 63, revenue: 32000,  expenses: 30000,  assets: 42000,  liabilities: 24000,  employees: 95,  shares: 2500 },
+];
+
+const priceByTicker: Record<string, number> = {};
+for (const s of allStocksRaw) priceByTicker[s.ticker] = s.price;
+
+function formatCr(value: number): string {
+  // value is in \u20B9. Convert to crore and format.
+  const cr = value / 1e7;
+  if (cr >= 100) return `${cr.toFixed(0)}Cr`;
+  if (cr >= 10) return `${cr.toFixed(1)}Cr`;
+  return `${cr.toFixed(2)}Cr`;
+}
+
+function formatVolume(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return `${n}`;
+}
+
+const stockFundamentals: Record<string, StockFundamentals> = {};
+for (const row of SEED_ROWS) {
+  const price = priceByTicker[row.ticker] ?? 1000;
+  const sharesOut = row.shares * 1000;
+  const marketCapValue = price * sharesOut;
+  const profit = (row.revenue - row.expenses) * 1000;
+  const eps = profit / sharesOut;
+  const pe = eps > 0 ? price / eps : 0;
+  const equity = (row.assets - row.liabilities) * 1000;
+  const bookValue = equity / sharesOut;
+  const roe = equity > 0 ? (profit / equity) * 100 : 0;
+  // Plausible volume: roughly 1–3% of float per day.
+  const avgVol = Math.round(sharesOut * 0.018);
+  const volume = Math.round(avgVol * 1.15);
+  stockFundamentals[row.ticker] = {
+    marketCap: formatCr(marketCapValue),
+    pe: +pe.toFixed(1),
+    eps: +eps.toFixed(2),
+    bookValue: +bookValue.toFixed(2),
+    roe: +roe.toFixed(1),
+    w52High: Math.round(price * 1.28),
+    w52Low: Math.round(price * 0.72),
+    volume: formatVolume(volume),
+    avgVolume: formatVolume(avgVol),
+    sector: row.sector,
+  };
+}
 
 export const stockDirectory: Record<string, StockInfo> = {};
 
 const perStockEvents: Record<string, StockInfo["events"]> = {
-  MACAD: [
+  ESOFT: [
     { title: "Q4 Results Announcement", date: "2026-04-24", type: "RESULTS" },
     { title: "Annual General Meeting", date: "2026-04-26", type: "AGM" },
   ],
-  MTEK: [
-    { title: "Product Launch — LaTeX Editor v3", date: "2026-04-25", type: "EVENT" },
-  ],
-  ESOFT: [
-    { title: "Q4 Results Announcement", date: "2026-04-24", type: "RESULTS" },
-    { title: "Open Source Contribution Drive", date: "2026-04-26", type: "EVENT" },
-  ],
   ECLOUD: [
-    { title: "Interim Dividend — \u20B912/share", date: "2026-04-25", type: "DIVIDEND" },
+    { title: "Interim Dividend \u2014 \u20B912/share", date: "2026-04-25", type: "DIVIDEND" },
   ],
   ENAI: [
     { title: "AI Expo Showcase", date: "2026-04-26", type: "EVENT" },
     { title: "Q4 Results Announcement", date: "2026-04-24", type: "RESULTS" },
   ],
+  GMRACE: [
+    { title: "National Racing Championship", date: "2026-04-25", type: "EVENT" },
+  ],
   GMAUTO: [
     { title: "Annual General Meeting", date: "2026-04-25", type: "AGM" },
     { title: "Q4 Results Announcement", date: "2026-04-26", type: "RESULTS" },
-  ],
-  GMRACE: [
-    { title: "National Racing Championship", date: "2026-04-25", type: "EVENT" },
   ],
   MSSTD: [
     { title: "Film Festival Premiere", date: "2026-04-24", type: "EVENT" },
@@ -767,33 +681,34 @@ const perStockEvents: Record<string, StockInfo["events"]> = {
   ERLEARN: [
     { title: "Q4 Results Announcement", date: "2026-04-25", type: "RESULTS" },
   ],
-  INDATA: [
-    { title: "Annual Data Summit", date: "2026-04-24", type: "EVENT" },
-    { title: "Q4 Results Announcement", date: "2026-04-25", type: "RESULTS" },
-    { title: "Final Dividend — \u20B98/share", date: "2026-04-26", type: "DIVIDEND" },
+  LLMED: [
+    { title: "Clinical Trial Readout", date: "2026-04-25", type: "EVENT" },
+    { title: "Final Dividend \u2014 \u20B98/share", date: "2026-04-26", type: "DIVIDEND" },
   ],
-  CELRES: [
-    { title: "Observatory Open Night", date: "2026-04-24", type: "EVENT" },
+  AEROD: [
+    { title: "Defense Expo Showcase", date: "2026-04-24", type: "EVENT" },
     { title: "Q4 Results Announcement", date: "2026-04-26", type: "RESULTS" },
   ],
-  CELBIO: [
-    { title: "Biotech Research Symposium", date: "2026-04-25", type: "EVENT" },
+  QBTR: [
+    { title: "Quantum Symposium", date: "2026-04-25", type: "EVENT" },
+  ],
+  CGNR: [
+    { title: "Annual General Meeting", date: "2026-04-25", type: "AGM" },
   ],
 };
 
 for (const s of allStocksRaw) {
+  const f = stockFundamentals[s.ticker];
   stockDirectory[s.ticker] = {
     ...s,
     chartData: generateChartData(s.price),
     overview: { open: s.price, dayLow: +(s.price * 0.985).toFixed(2), dayHigh: +(s.price * 1.012).toFixed(2) },
-    fundamentals: stockFundamentals[s.ticker],
+    fundamentals: f,
     events: perStockEvents[s.ticker],
   };
 }
 
 // Enriched flat list for screener / stocks page (merges fundamentals + sparkline)
-const holdingSparklines: Record<string, number[]> = {};
-for (const h of holdings) holdingSparklines[h.ticker] = h.sparkline;
 const watchlistSparklines: Record<string, number[]> = {};
 for (const w of watchlist) watchlistSparklines[w.ticker] = w.sparkline;
 
@@ -807,8 +722,54 @@ export const allStocksEnriched = allStocksRaw.map((s) => {
     sector: f.sector,
     pe: f.pe,
     volume: parseFloat(f.volume) * 1_000_000,
-    sparkline: holdingSparklines[s.ticker] || watchlistSparklines[s.ticker] || [s.price, s.price, s.price, s.price, s.price],
+    sparkline: watchlistSparklines[s.ticker] || [s.price, s.price, s.price, s.price, s.price],
   };
+});
+
+// ─── Indices (built after allStocksRaw so we can reference tickers) ────
+const techTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Technology").map(s => s.ticker);
+const mediaTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Media").map(s => s.ticker);
+const financeTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Finance").map(s => s.ticker);
+const autoTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Automotive").map(s => s.ticker);
+const pharmaTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Pharmaceutical").map(s => s.ticker);
+const defenseTickers = allStocksRaw.filter(s => stockFundamentals[s.ticker].sector === "Defense").map(s => s.ticker);
+const allTickers = allStocksRaw.map(s => s.ticker);
+
+// Top-priced stocks (flagships) for AEON 50.
+const aeon50Tickers = [...allStocksRaw].sort((a, b) => b.price - a.price).slice(0, 10).map(s => s.ticker);
+
+// MIDCAP = the SECONDARY-tier tickers from the 19 holdings (second stock per holding in allStocksRaw order).
+const midcapTickers: string[] = [];
+for (let i = 1; i < allStocksRaw.length; i += 3) midcapTickers.push(allStocksRaw[i].ticker);
+
+export const indices: IndexData[] = [
+  { name: "AEON 50", slug: "aeon-50", value: 23519.35, change: 187.45, changePercent: 0.80, sparkline: [23200, 23280, 23350, 23410, 23460, 23500, 23519], description: "The AEON 50 index tracks the top 10 highest-priced flagship companies listed on the MCSE. It is the benchmark index for the exchange.", constituents: aeon50Tickers, chartData: generateIndexChart(23519.35) },
+  { name: "AEDEX", slug: "aedex", value: 77478.93, change: 602.75, changePercent: 0.78, sparkline: [76800, 76950, 77100, 77250, 77350, 77420, 77478], description: "The AEDEX is a broad-market index covering all listed stocks on the MCSE, weighted by market capitalisation.", constituents: allTickers, chartData: generateIndexChart(77478.93) },
+  { name: "BANKAEON", slug: "bankaeon", value: 50892.15, change: -123.40, changePercent: -0.24, sparkline: [51050, 51010, 50980, 50950, 50920, 50900, 50892], description: "BANKAEON is the financial-sector index tracking companies in banking, financial services, and insurance.", constituents: financeTickers, chartData: generateIndexChart(50892.15) },
+  { name: "MIDCAPEON", slug: "midcapeon", value: 11245.60, change: 89.30, changePercent: 0.80, sparkline: [11140, 11160, 11180, 11200, 11220, 11238, 11245], description: "MIDCAPEON tracks mid-cap companies on the MCSE \u2014 the SECONDARY-tier subsidiary of each holding group.", constituents: midcapTickers, chartData: generateIndexChart(11245.60) },
+  { name: "FINAEON", slug: "finaeon", value: 23412.80, change: 45.20, changePercent: 0.19, sparkline: [23360, 23370, 23380, 23390, 23400, 23408, 23412], description: "FINAEON covers finance, investment, and advisory companies on the MCSE.", constituents: financeTickers, chartData: generateIndexChart(23412.80) },
+  { name: "ITAEON", slug: "itaeon", value: 38642.10, change: 312.80, changePercent: 0.82, sparkline: [38280, 38350, 38420, 38480, 38550, 38610, 38642], description: "ITAEON tracks information technology companies on the MCSE, including software, cloud, AI, and quantum firms.", constituents: techTickers, chartData: generateIndexChart(38642.10) },
+  { name: "AUTOAEON", slug: "autoaeon", value: 21834.50, change: -78.60, changePercent: -0.36, sparkline: [21920, 21900, 21880, 21860, 21848, 21840, 21834], description: "AUTOAEON is the automotive-sector index tracking racing, automotive manufacturing, and services companies.", constituents: autoTickers, chartData: generateIndexChart(21834.50) },
+  { name: "PHARMAEON", slug: "pharmaeon", value: 17298.40, change: 142.30, changePercent: 0.83, sparkline: [17120, 17150, 17190, 17220, 17255, 17280, 17298], description: "PHARMAEON covers pharmaceutical, medical device, and biotech companies on the MCSE.", constituents: pharmaTickers, chartData: generateIndexChart(17298.40) },
+];
+
+export const indexDirectory: Record<string, IndexData> = {};
+for (const idx of indices) indexDirectory[idx.slug] = idx;
+
+// Silence unused-variable noise for `mediaTickers` / `defenseTickers` if a tsconfig flag flips on.
+void mediaTickers;
+void defenseTickers;
+
+// ─── Ticker Tape Data ───────────────────────────────────
+const tickerTapeRaw = [
+  ...watchlist.map(w => ({ ticker: w.ticker, price: w.price, changePercent: w.dayChangePercent })),
+  ...allStocksRaw.map(s => ({ ticker: s.ticker, price: s.price, changePercent: s.changePercent })),
+];
+const tickerSeen = new Set<string>();
+export const tickerTapeItems = tickerTapeRaw.filter(item => {
+  if (tickerSeen.has(item.ticker)) return false;
+  tickerSeen.add(item.ticker);
+  return true;
 });
 
 // ─── Order Book ─────────────────────────────────────────
@@ -841,6 +802,8 @@ export function generateOrderBook(basePrice: number): OrderBook {
   return { bids, asks };
 }
 
+// ─── Enigma Holding Company Admin Data ──────────────────
+// Admin dashboard uses this to display the ENIGMA holding view.
 export const enigmaCompanyData = {
   ticker: "ENIGMA",
   sharesInCirculation: 50000,
@@ -854,7 +817,7 @@ export const enigmaCompanyData = {
     { name: "Sneha Iyer", shares: 2900, percentage: 5.8 },
   ],
   companyNews: [
-    { id: "CN-1", title: "Enigma AI wins National Hackathon 2026", content: "Enigma AI's team secured first place at the National Collegiate Hackathon held in Bangalore, beating 200+ teams.", timestamp: Date.now() - 86400000 * 2 },
+    { id: "CN-1", title: "Enigma AI wins National Hackathon 2026", content: "Enigma AI's team secured first place at the National Collegiate Hackathon, beating 200+ teams.", timestamp: Date.now() - 86400000 * 2 },
     { id: "CN-2", title: "Enigma Cloud launches new CTF Lab", content: "Enigma Cloud inaugurated a dedicated cybersecurity lab with state-of-the-art infrastructure for CTF competitions.", timestamp: Date.now() - 86400000 * 7 },
     { id: "CN-3", title: "Enigma Software hits 500 open-source PRs", content: "Members contributed over 500 pull requests to major open-source projects during the spring contribution drive.", timestamp: Date.now() - 86400000 * 14 },
   ],
@@ -865,82 +828,4 @@ export const enigmaCompanyData = {
   ],
 };
 
-// ─── IPO Listings ───────────────────────────────────────
-export interface IPO {
-  name: string;
-  ticker: string;
-  priceLow: number;
-  priceHigh: number;
-  lotPrice: number;
-  dateStart: string;
-  dateEnd: string;
-  status: "LIVE" | "UPCOMING" | "CLOSED";
-  lotSize: number;
-  maxLots: number;
-  gmp: number;
-  subscriptionTimes: number;
-  retailSubscription: number;
-  niiSubscription: number;
-  about: string;
-  drhpUrl: string;
-}
-
-export const ipoList: IPO[] = [
-  {
-    name: "VORTEX ENERGY",
-    ticker: "VORTEX",
-    priceLow: 1200,
-    priceHigh: 1350,
-    lotPrice: 13500,
-    dateStart: "Jun 10",
-    dateEnd: "Jun 13",
-    status: "LIVE",
-    lotSize: 10,
-    maxLots: 5,
-    gmp: 180,
-    subscriptionTimes: 3.2,
-    retailSubscription: 4.8,
-    niiSubscription: 2.1,
-    about:
-      "Renewable energy club focused on sustainable campus solutions and green technology initiatives. Active in solar panel installations and EV charging infrastructure across campus.",
-    drhpUrl: "#",
-  },
-  {
-    name: "AEON DYNAMICS",
-    ticker: "AEONDYN",
-    priceLow: 850,
-    priceHigh: 920,
-    lotPrice: 13800,
-    dateStart: "Jun 15",
-    dateEnd: "Jun 18",
-    status: "UPCOMING",
-    lotSize: 15,
-    maxLots: 7,
-    gmp: 0,
-    subscriptionTimes: 0,
-    retailSubscription: 0,
-    niiSubscription: 0,
-    about:
-      "Robotics and automation club specializing in drone technology and autonomous systems. Winners of the national RoboCup challenge 2025.",
-    drhpUrl: "#",
-  },
-  {
-    name: "NEXGEN LABS",
-    ticker: "NEXGEN",
-    priceLow: 340,
-    priceHigh: 380,
-    lotPrice: 9500,
-    dateStart: "Jun 20",
-    dateEnd: "Jun 23",
-    status: "UPCOMING",
-    lotSize: 25,
-    maxLots: 10,
-    gmp: 0,
-    subscriptionTimes: 0,
-    retailSubscription: 0,
-    niiSubscription: 0,
-    about:
-      "Research-driven biotech and chemistry club with published papers in peer-reviewed journals. Three patents pending for novel water purification methods.",
-    drhpUrl: "#",
-  },
-];
+// IPO and ETF concepts removed from the platform.

@@ -395,6 +395,9 @@ async function apiFetch<T, Raw = T>(
     const token = _tokenGetter ? await _tokenGetter() : null;
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
+      // Prevent Next.js / browser caching so news and other feeds don't
+      // show stale data after a refresh right after a write.
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
@@ -450,12 +453,12 @@ export async function getMarketStatus(): Promise<ApiResponse<MarketStatus>> {
 }
 
 // Phase-aware admin action helper.
-//   IDLE                       → /admin/market/start
+//   IDLE | EVENT_END            → /admin/market/start
 //   DAY_1 | DAY_2 | PRE_MARKET → /admin/market/pause
 //   PAUSED | DAY_END_1         → /admin/market/resume
 export async function toggleMarketStatus(currentPhase: MarketPhase): Promise<ApiResponse<{ ok: boolean }>> {
   let endpoint: string;
-  if (currentPhase === "IDLE") endpoint = "/admin/market/start";
+  if (currentPhase === "IDLE" || currentPhase === "EVENT_END") endpoint = "/admin/market/start";
   else if (currentPhase === "PRE_MARKET" || currentPhase === "DAY_1" || currentPhase === "DAY_2") endpoint = "/admin/market/pause";
   else if (currentPhase === "PAUSED" || currentPhase === "DAY_END_1" || currentPhase === "ALLOTMENT_POSTED") endpoint = "/admin/market/resume";
   else return { data: null, error: `Cannot toggle market from phase: ${currentPhase}`, status: 409 };
@@ -664,8 +667,9 @@ export async function rejectRegistration(id: string, reason?: string): Promise<A
 
 // === Company Game State ===
 
-export async function getCompanyGameState(): Promise<ApiResponse<CompanyGameState>> {
-  return apiFetch("/company/gamestate", {}, mockGameState);
+export async function getCompanyGameState(ticker?: string): Promise<ApiResponse<CompanyGameState>> {
+  const qs = ticker ? `?ticker=${encodeURIComponent(ticker)}` : "";
+  return apiFetch(`/company/gamestate${qs}`, {}, mockGameState);
 }
 
 // === Credibility ===
@@ -1035,6 +1039,37 @@ export async function getNews(params?: {
 
 export async function getNewsItem(id: string): Promise<ApiResponse<NewsItem | null>> {
   return apiFetch<NewsItem | null>(`/market/news/${id}`, {}, null);
+}
+
+export async function submitCompanyNews(data: {
+  headline: string;
+  body: string;
+  relatedTickers: string[];
+  source?: string;
+}): Promise<ApiResponse<{ id: string }>> {
+  return apiFetch(
+    "/company/news",
+    { method: "POST", body: JSON.stringify(data) },
+    { id: `NEWS-${Date.now()}` },
+  );
+}
+
+export async function getAdminPendingNews(): Promise<ApiResponse<NewsItem[]>> {
+  return apiFetch<NewsItem[]>("/admin/news/pending", {}, []);
+}
+
+export async function approveAdminNews(id: string): Promise<ApiResponse<{ ok: boolean }>> {
+  return apiFetch(`/admin/news/${id}/approve`, { method: "POST" }, { ok: true });
+}
+
+export async function deleteAdminNews(id: string): Promise<ApiResponse<{ ok: boolean }>> {
+  return apiFetch(`/admin/news/${id}`, { method: "DELETE" }, { ok: true });
+}
+
+// Reject (but keep) a pending news item — status flips to REJECTED, the
+// company dashboard still shows it so the submitter sees the decision.
+export async function rejectAdminNews(id: string): Promise<ApiResponse<{ ok: boolean }>> {
+  return apiFetch(`/admin/news/${id}/reject`, { method: "POST" }, { ok: true });
 }
 
 // === Screener ===

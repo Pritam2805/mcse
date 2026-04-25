@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronUp, ChevronDown, ArrowLeft, SlidersHorizontal, X, ArrowUpDown } from "lucide-react";
 import { getScreener, type ScreenerItem } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 
 type SortKey = "ticker" | "price" | "change" | "volume";
 type SortDir = "asc" | "desc";
@@ -33,12 +34,11 @@ export default function ScreenerPage() {
   const [mobileSortOpen, setMobileSortOpen] = useState(false);
   const [mobileValue, setMobileValue] = useState<MobileValueKey>("price");
 
-  useEffect(() => {
-    getScreener().then(res => {
-      if (res.data) setStocks(res.data);
-      setLoading(false);
-    });
-  }, []);
+  usePoll(async () => {
+    const res = await getScreener();
+    if (res.data) setStocks(res.data);
+    setLoading(false);
+  }, 5000);
 
   const sectors = useMemo(() => {
     const s = new Set(stocks.map(st => st.sector));

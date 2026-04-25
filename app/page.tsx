@@ -9,22 +9,17 @@ import Sparkline from "@/components/Sparkline";
 import { useAuth } from "@/lib/AuthContext";
 import {
   indices,
-  topGainers,
-  topLosers,
-  volumeShockers,
   productsAndTools,
-  newsItems,
   formatRelativeTime,
   parentCompanies,
-  stockDirectory,
-  type MoverStock,
 } from "@/lib/mockData";
-import { getMarketStatus, type MarketStatus } from "@/lib/api";
+import { getMarketStatus, getScreener, getNews, type MarketStatus, type ScreenerItem, type NewsItem } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 
 const PHASE_LABEL: Record<MarketStatus["phase"], string> = {
   IDLE: "COMING SOON",
-  PRE_MARKET: "IPO OPEN",
-  ALLOTMENT_POSTED: "ALLOTMENT POSTED",
+  PRE_MARKET: "PRE-MARKET",
+  ALLOTMENT_POSTED: "PRE-MARKET",
   DAY_1: "DAY 1 / 2",
   DAY_END_1: "DAY 1 CLOSED",
   DAY_2: "DAY 2 / 2",
@@ -71,27 +66,39 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 type MoverTab = "GAINERS" | "LOSERS" | "VOLUME";
-type MoverSortKey = "ticker" | "price" | "dayChangePercent" | "volume";
+type MoverSortKey = "ticker" | "price" | "change_pct" | "volume";
 type SortDir = "asc" | "desc";
 
 const filteredProducts = productsAndTools.filter(
-  (p) => !["BONDS", "STOCKS SIP", "MTF STOCKS"].includes(p.label)
+  (p) => !["BONDS", "STOCKS SIP", "MTF STOCKS", "IPO", "ETFs", "IPOs", "ETF"].includes(p.label)
 );
 
 const productRoutes: Record<string, string> = {
-  "IPO": "/ipo",
-  "ETFs": "/etfs",
   "INTRADAY SCREENER": "/screener",
   "EVENTS CALENDAR": "/events",
 };
 
 export default function ExplorePage() {
   const [activeTab, setActiveTab] = useState<MoverTab>("GAINERS");
-  const [moverSort, setMoverSort] = useState<MoverSortKey>("dayChangePercent");
+  const [moverSort, setMoverSort] = useState<MoverSortKey>("change_pct");
   const [moverSortDir, setMoverSortDir] = useState<SortDir>("desc");
   const [moverSortOpen, setMoverSortOpen] = useState(false);
-  const [moverMobileValue, setMoverMobileValue] = useState<"price" | "dayChangePercent" | "volume">("price");
+  const [moverMobileValue, setMoverMobileValue] = useState<"price" | "change_pct" | "volume">("price");
   const { isLoggedIn } = useAuth();
+
+  const [screenerData, setScreenerData] = useState<ScreenerItem[]>([]);
+  const [liveNews, setLiveNews] = useState<NewsItem[]>([]);
+
+  usePoll(async () => {
+    const [sRes, nRes] = await Promise.all([getScreener(), getNews({ limit: 5 })]);
+    if (sRes.data && sRes.data.length > 0) setScreenerData(sRes.data);
+    if (nRes.data && nRes.data.length > 0) setLiveNews(nRes.data);
+  }, 5000);
+
+  const screenerMap = useMemo(
+    () => Object.fromEntries(screenerData.map(s => [s.ticker, s])),
+    [screenerData]
+  );
 
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   useEffect(() => {
@@ -112,25 +119,23 @@ export default function ExplorePage() {
     return () => clearInterval(id);
   }, []);
 
-  const currentMovers = useMemo(() => {
-    const moverData: Record<MoverTab, MoverStock[]> = {
-      GAINERS: topGainers,
-      LOSERS: topLosers,
-      VOLUME: volumeShockers,
-    };
-    const arr = [...moverData[activeTab]];
-    arr.sort((a, b) => {
-      let av: string | number, bv: string | number;
-      if (moverSort === "ticker") { av = a.ticker; bv = b.ticker; }
-      else if (moverSort === "volume") {
-        av = parseFloat(a.volume); bv = parseFloat(b.volume);
-      }
-      else { av = a[moverSort]; bv = b[moverSort]; }
-      if (typeof av === "string") return moverSortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
-      return moverSortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  const currentMovers = useMemo((): ScreenerItem[] => {
+    const valid = screenerData.filter(s => s.price !== null);
+    let base: ScreenerItem[];
+    if (activeTab === "GAINERS") {
+      base = [...valid].sort((a, b) => (b.change_pct ?? -Infinity) - (a.change_pct ?? -Infinity)).slice(0, 7);
+    } else if (activeTab === "LOSERS") {
+      base = [...valid].sort((a, b) => (a.change_pct ?? Infinity) - (b.change_pct ?? Infinity)).slice(0, 7);
+    } else {
+      base = [...valid].sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, 7);
+    }
+    return [...base].sort((a, b) => {
+      if (moverSort === "ticker") return moverSortDir === "asc" ? a.ticker.localeCompare(b.ticker) : b.ticker.localeCompare(a.ticker);
+      const av = (a[moverSort] as number | null) ?? -Infinity;
+      const bv = (b[moverSort] as number | null) ?? -Infinity;
+      return moverSortDir === "asc" ? av - bv : bv - av;
     });
-    return arr.slice(0, 7);
-  }, [activeTab, moverSort, moverSortDir]);
+  }, [screenerData, activeTab, moverSort, moverSortDir]);
 
   function toggleMoverSort(key: MoverSortKey) {
     if (moverSort === key) setMoverSortDir(d => d === "asc" ? "desc" : "asc");
@@ -232,7 +237,7 @@ export default function ExplorePage() {
                   transition={{ delay: 0.42, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                   className="mb-8"
                 >
-                  <p className="text-[8px] tracking-[0.25em] text-white/25 mb-2.5">IPO OPENS APR 23 &#183; 6:30 PM IST</p>
+                  <p className="text-[8px] tracking-[0.25em] text-white/25 mb-2.5">MARKET OPENS APR 23 &#183; 6:30 PM IST</p>
                   <div className="flex items-baseline gap-0">
                     {([
                       { label: "D", value: timeLeft.days },
@@ -353,11 +358,97 @@ export default function ExplorePage() {
       <div className="lg:grid lg:grid-cols-[3fr_2fr] lg:gap-8">
         {/* LEFT COLUMN */}
         <div className="min-w-0">
-          {/* TOP MOVERS TODAY */}
+          {/* HOLDING COMPANIES (swapped up from below) */}
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.05, ease: [0.25, 0.1, 0.25, 1] }}
+            className="mb-9 md:mb-10"
+          >
+            <Link href="/companies" className="flex items-center justify-between mb-5 group">
+              <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
+                HOLDING COMPANIES
+              </h2>
+              <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
+            </Link>
+            <div className="space-y-[1px] bg-white/8">
+              {parentCompanies.slice(0, 4).map((pc) => {
+                const subChanges = pc.subsidiaries.map(t => screenerMap[t]?.change_pct).filter((v): v is number => v !== null && v !== undefined);
+                const avgChange = subChanges.length > 0 ? subChanges.reduce((s, v) => s + v, 0) / subChanges.length : 0;
+                return (
+                  <Link
+                    key={pc.ticker}
+                    href={`/company/${pc.ticker}`}
+                    className="flex items-center gap-4 bg-bg p-4 md:p-5 hover:bg-white/[0.03] transition-colors group"
+                  >
+                    <div className="w-10 h-10 border border-white/20 flex items-center justify-center shrink-0 group-hover:border-white/40 transition-colors">
+                      <span className="font-[var(--font-anton)] text-base text-white/60">{pc.logoLetter}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em] group-hover:text-white transition-colors">{pc.name}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {pc.subsidiaries.map(t => (
+                          <span key={t} className="text-[9px] tracking-[0.08em] text-white/25">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={`text-[12px] font-medium ${avgChange >= 0 ? "text-up" : "text-down"}`}>
+                        {avgChange >= 0 ? "+" : ""}{avgChange.toFixed(2)}%
+                      </p>
+                      <p className="text-[9px] text-white/20 mt-0.5">{pc.subsidiaries.length} subs</p>
+                    </div>
+                    <ChevronRight size={12} className="text-white/15 group-hover:text-white/40 transition-colors shrink-0 hidden md:block" />
+                  </Link>
+                );
+              })}
+            </div>
+            <Link href="/companies" className="flex items-center justify-center gap-1 mt-2 py-2.5 text-[9px] tracking-[0.12em] text-white/30 hover:text-white transition-colors border border-white/6">
+              SEE ALL {parentCompanies.length} COMPANIES <ChevronRight size={11} />
+            </Link>
+          </motion.div>
+
+          {/* MARKET INDICES (stays in middle) */}
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.08, ease: [0.25, 0.1, 0.25, 1] }}
+            className="mb-8 md:mb-10"
+          >
+            <Link href="/markets" className="flex items-center justify-between mb-5 group">
+              <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
+                MARKET INDICES
+              </h2>
+              <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
+            </Link>
+            <div className="grid grid-cols-2 gap-[1px] bg-white/8">
+              {indices.slice(0, 4).map((idx) => (
+                <div
+                  key={idx.name}
+                  className="bg-bg p-4 hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] tracking-[0.1em] text-white/50">{idx.name}</p>
+                    <Sparkline data={idx.sparkline} width={40} height={14} positive={idx.changePercent >= 0} />
+                  </div>
+                  <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
+                    {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </p>
+                  <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
+                    {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%)
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* TOP MOVERS TODAY (swapped down from above) */}
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1, ease: [0.25, 0.1, 0.25, 1] }}
             className="mb-9 md:mb-10"
           >
             <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase mb-5">
@@ -397,13 +488,13 @@ export default function ExplorePage() {
                 </button>
                 {moverSortOpen && (
                   <div className="absolute top-full left-0 mt-1 z-20 border border-white/15 bg-bg min-w-[140px]">
-                    {(["ticker", "price", "dayChangePercent", "volume"] as MoverSortKey[]).map((key) => (
+                    {(["ticker", "price", "change_pct", "volume"] as MoverSortKey[]).map((key) => (
                       <button
                         key={key}
                         onClick={() => { setMoverSort(key); setMoverSortDir("desc"); setMoverSortOpen(false); }}
                         className={`block w-full text-left px-4 py-2.5 text-[10px] tracking-[0.1em] transition-colors ${moverSort === key ? "text-white bg-white/[0.06]" : "text-white/50 hover:text-white hover:bg-white/[0.03]"}`}
                       >
-                        {{ ticker: "NAME", price: "PRICE", dayChangePercent: "CHANGE %", volume: "VOLUME" }[key]}
+                        {{ ticker: "NAME", price: "PRICE", change_pct: "CHANGE %", volume: "VOLUME" }[key]}
                       </button>
                     ))}
                   </div>
@@ -414,17 +505,19 @@ export default function ExplorePage() {
                   </span>
                   <button
                     onClick={() => setMoverMobileValue((d) => {
-                      const order: typeof d[] = ["price", "dayChangePercent", "volume"];
+                      const order: typeof d[] = ["price", "change_pct", "volume"];
                       return order[(order.indexOf(d) + 1) % order.length];
                     })}
                     className="px-3 py-1.5 border border-white/15 text-[9px] tracking-[0.1em] text-white/60 hover:text-white hover:border-white transition-colors"
                   >
-                    {{ price: "PRICE", dayChangePercent: "CHG%", volume: "VOL" }[moverMobileValue]}
+                    {{ price: "PRICE", change_pct: "CHG%", volume: "VOL" }[moverMobileValue]}
                   </button>
                 </div>
               </div>
               <div className="space-y-2">
-              {currentMovers.map((stock) => (
+              {currentMovers.length === 0 ? (
+                <p className="text-[11px] text-white/25 animate-pulse tracking-[0.1em] py-4">LOADING...</p>
+              ) : currentMovers.map((stock) => (
                 <Link
                   key={stock.ticker}
                   href={`/stock/${stock.ticker}`}
@@ -434,24 +527,23 @@ export default function ExplorePage() {
                     <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em]">{stock.ticker}</p>
                     <p className="text-[11px] text-white/40 truncate mt-0.5">{stock.name}</p>
                   </div>
-                  <Sparkline data={stock.sparkline} width={52} height={22} positive={stock.dayChangePercent >= 0} />
                   <div className="text-right shrink-0 min-w-[70px]">
                     {moverMobileValue === "price" && (
                       <>
-                        <p className="font-[var(--font-anton)] text-[13px]">{"\u20B9"}{stock.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
-                        <p className={`text-[10px] font-medium ${stock.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>{stock.dayChangePercent >= 0 ? "+" : ""}{stock.dayChangePercent.toFixed(2)}%</p>
+                        <p className="font-[var(--font-anton)] text-[13px]">{"\u20B9"}{(stock.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                        <p className={`text-[10px] font-medium ${(stock.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>{(stock.change_pct ?? 0) >= 0 ? "+" : ""}{(stock.change_pct ?? 0).toFixed(2)}%</p>
                       </>
                     )}
-                    {moverMobileValue === "dayChangePercent" && (
+                    {moverMobileValue === "change_pct" && (
                       <>
-                        <p className={`font-[var(--font-anton)] text-[13px] ${stock.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>{stock.dayChangePercent >= 0 ? "+" : ""}{stock.dayChangePercent.toFixed(2)}%</p>
-                        <p className="text-[10px] text-white/30">{"\u20B9"}{stock.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
+                        <p className={`font-[var(--font-anton)] text-[13px] ${(stock.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>{(stock.change_pct ?? 0) >= 0 ? "+" : ""}{(stock.change_pct ?? 0).toFixed(2)}%</p>
+                        <p className="text-[10px] text-white/30">{"\u20B9"}{(stock.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</p>
                       </>
                     )}
                     {moverMobileValue === "volume" && (
                       <>
-                        <p className="text-[12px] text-white/50">{stock.volume}</p>
-                        <p className={`text-[10px] font-medium ${stock.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>{stock.dayChangePercent >= 0 ? "+" : ""}{stock.dayChangePercent.toFixed(2)}%</p>
+                        <p className="text-[12px] text-white/50">{stock.volume !== null ? `${(stock.volume / 1_000).toFixed(0)}K` : "—"}</p>
+                        <p className={`text-[10px] font-medium ${(stock.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>{(stock.change_pct ?? 0) >= 0 ? "+" : ""}{(stock.change_pct ?? 0).toFixed(2)}%</p>
                       </>
                     )}
                   </div>
@@ -465,11 +557,13 @@ export default function ExplorePage() {
 
             {/* Desktop table with sortable headers */}
             <div className="hidden lg:block">
-              <div className="grid grid-cols-[1fr_100px_120px_80px] gap-4 px-4 py-2 border-b border-white/12">
+              <div className="grid grid-cols-[1fr_110px_120px_80px] gap-4 px-4 py-2 border-b border-white/12">
                 <button onClick={() => toggleMoverSort("ticker")} className="text-[9px] tracking-[0.2em] text-white/30 uppercase text-left hover:text-white transition-colors">
                   COMPANY {sortIcon("ticker")}
                 </button>
-                <span className="text-[9px] tracking-[0.2em] text-white/30 uppercase text-right">TREND</span>
+                <button onClick={() => toggleMoverSort("change_pct")} className="text-[9px] tracking-[0.2em] text-white/30 uppercase text-right hover:text-white transition-colors">
+                  CHG% {sortIcon("change_pct")}
+                </button>
                 <button onClick={() => toggleMoverSort("price")} className="text-[9px] tracking-[0.2em] text-white/30 uppercase text-right hover:text-white transition-colors">
                   MKT PRICE {sortIcon("price")}
                 </button>
@@ -477,119 +571,32 @@ export default function ExplorePage() {
                   VOLUME {sortIcon("volume")}
                 </button>
               </div>
-              {currentMovers.map((stock) => (
+              {currentMovers.length === 0 ? (
+                <p className="text-[11px] text-white/25 animate-pulse tracking-[0.1em] py-6 px-4">LOADING...</p>
+              ) : currentMovers.map((stock) => (
                 <Link
                   key={stock.ticker}
                   href={`/stock/${stock.ticker}`}
-                  className="grid grid-cols-[1fr_100px_120px_80px] gap-4 px-4 py-3 border-b border-white/6 hover:bg-white/[0.04] transition-colors duration-300 items-center"
+                  className="grid grid-cols-[1fr_110px_120px_80px] gap-4 px-4 py-3 border-b border-white/6 hover:bg-white/[0.04] transition-colors duration-300 items-center"
                 >
                   <div>
                     <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em]">{stock.ticker}</p>
                     <p className="text-[10px] text-white/40 mt-0.5">{stock.name}</p>
                   </div>
-                  <div className="flex justify-end">
-                    <Sparkline data={stock.sparkline} width={80} height={24} positive={stock.dayChangePercent >= 0} />
-                  </div>
+                  <p className={`text-[11px] font-medium text-right ${stock.change_pct === null ? "text-white/30" : (stock.change_pct ?? 0) >= 0 ? "text-up" : "text-down"}`}>
+                    {stock.change_pct !== null ? `${(stock.change_pct ?? 0) >= 0 ? "+" : ""}${(stock.change_pct ?? 0).toFixed(2)}%` : "—"}
+                  </p>
                   <div className="text-right">
                     <p className="font-[var(--font-anton)] text-[13px]">
-                      {"\u20B9"}{stock.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className={`text-[10px] font-medium ${stock.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>
-                      {stock.dayChangePercent >= 0 ? "+" : ""}{stock.dayChangePercent.toFixed(2)}%
+                      {stock.price !== null ? `₹${stock.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[11px] text-white/40">{stock.volume}</p>
+                    <p className="text-[11px] text-white/40">{stock.volume !== null ? `${(stock.volume / 1_000).toFixed(0)}K` : "—"}</p>
                   </div>
                 </Link>
               ))}
             </div>
-          </motion.div>
-
-          {/* MARKET INDICES */}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.08, ease: [0.25, 0.1, 0.25, 1] }}
-            className="mb-8 md:mb-10"
-          >
-            <Link href="/markets" className="flex items-center justify-between mb-5 group">
-              <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
-                MARKET INDICES
-              </h2>
-              <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
-            </Link>
-            <div className="grid grid-cols-2 gap-[1px] bg-white/8">
-              {indices.slice(0, 4).map((idx) => (
-                <div
-                  key={idx.name}
-                  className="bg-bg p-4 hover:bg-white/[0.03] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] tracking-[0.1em] text-white/50">{idx.name}</p>
-                    <Sparkline data={idx.sparkline} width={40} height={14} positive={idx.changePercent >= 0} />
-                  </div>
-                  <p className="font-[var(--font-anton)] text-[15px] tracking-tight mb-0.5">
-                    {idx.value.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className={`text-[10px] font-medium ${idx.changePercent >= 0 ? "text-up" : "text-down"}`}>
-                    {idx.change >= 0 ? "+" : ""}{idx.change.toFixed(2)} ({idx.changePercent >= 0 ? "+" : ""}{idx.changePercent.toFixed(2)}%)
-                  </p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* HOLDING COMPANIES */}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1, ease: [0.25, 0.1, 0.25, 1] }}
-            className="mb-9 md:mb-10"
-          >
-            <Link href="/companies" className="flex items-center justify-between mb-5 group">
-              <h2 className="font-[var(--font-anton)] text-base md:text-lg tracking-[0.1em] uppercase">
-                HOLDING COMPANIES
-              </h2>
-              <ChevronRight size={14} className="text-white/20 group-hover:text-white/50 transition-colors" />
-            </Link>
-            <div className="space-y-[1px] bg-white/8">
-              {parentCompanies.slice(0, 4).map((pc) => {
-                const subs = pc.subsidiaries.map(t => stockDirectory[t]).filter(Boolean);
-                const avgChange = subs.length > 0 ? subs.reduce((s, sub) => s + sub.changePercent, 0) / subs.length : 0;
-                return (
-                  <Link
-                    key={pc.ticker}
-                    href={`/company/${pc.ticker}`}
-                    className="flex items-center gap-4 bg-bg p-4 md:p-5 hover:bg-white/[0.03] transition-colors group"
-                  >
-                    <div className="w-10 h-10 border border-white/20 flex items-center justify-center shrink-0 group-hover:border-white/40 transition-colors">
-                      <span className="font-[var(--font-anton)] text-base text-white/60">{pc.logoLetter}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-[var(--font-anton)] text-[13px] tracking-[0.05em] group-hover:text-white transition-colors">{pc.name}</p>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {subs.map(sub => (
-                          <span key={sub.ticker} className="text-[9px] tracking-[0.08em] text-white/25">{sub.ticker}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-[12px] font-medium ${avgChange >= 0 ? "text-up" : "text-down"}`}>
-                        {avgChange >= 0 ? "+" : ""}{avgChange.toFixed(2)}%
-                      </p>
-                      <p className="text-[9px] text-white/20 mt-0.5">{subs.length} subs</p>
-                    </div>
-                    <ChevronRight size={12} className="text-white/15 group-hover:text-white/40 transition-colors shrink-0 hidden md:block" />
-                  </Link>
-                );
-              })}
-            </div>
-            <Link href="/companies" className="flex items-center justify-center gap-1 mt-2 py-2.5 text-[9px] tracking-[0.12em] text-white/30 hover:text-white transition-colors border border-white/6">
-              SEE ALL {parentCompanies.length} COMPANIES <ChevronRight size={11} />
-            </Link>
           </motion.div>
 
           {/* STOCKS IN NEWS TODAY (mobile, below movers) */}
@@ -606,22 +613,27 @@ export default function ExplorePage() {
               <ChevronRight size={16} className="text-white/30 group-hover:text-white/60 transition-colors" />
             </Link>
             <div className="space-y-3">
-              {newsItems.slice(0, 3).map((news, i) => (
-                <Link
-                  key={`${news.ticker}-${i}`}
-                  href={`/stock/${news.ticker}`}
-                  className="block border border-white/8 p-4 hover:bg-white/[0.03] transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-[var(--font-anton)] text-[12px] tracking-[0.05em]">{news.name}</p>
-                    <p className={`text-[11px] font-medium ${news.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>
-                      {news.dayChangePercent >= 0 ? "+" : ""}{news.dayChangePercent.toFixed(2)}%
-                    </p>
-                  </div>
-                  <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2 mb-1">{news.headline}</p>
-                  <p className="text-[9px] text-white/20">{formatRelativeTime(news.timestamp)}</p>
-                </Link>
-              ))}
+              {liveNews.length === 0 ? (
+                <p className="text-[11px] text-white/25 animate-pulse tracking-[0.1em] py-2">LOADING NEWS...</p>
+              ) : liveNews.slice(0, 3).map((news, i) => {
+                const ticker = news.related_tickers?.[0] ?? null;
+                return (
+                  <Link
+                    key={`${news.id}-${i}`}
+                    href={ticker ? `/stock/${ticker}` : `/news/${news.id}`}
+                    className="block border border-white/8 p-4 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-[var(--font-anton)] text-[12px] tracking-[0.05em]">{ticker ?? "NEWS"}</p>
+                      <p className={`text-[11px] font-medium ${news.sentiment >= 0 ? "text-up" : "text-down"}`}>
+                        {news.sentiment >= 0 ? "+" : ""}{(news.sentiment * 100).toFixed(1)}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2 mb-1">{news.headline}</p>
+                    <p className="text-[9px] text-white/20">{formatRelativeTime(news.published_at ? new Date(news.published_at).getTime() : Date.now())}</p>
+                  </Link>
+                );
+              })}
             </div>
           </motion.div>
 
@@ -643,22 +655,29 @@ export default function ExplorePage() {
               <ChevronRight size={12} className="text-white/20 group-hover:text-white/50 transition-colors" />
             </Link>
             <div className="space-y-3">
-              {newsItems.slice(0, 4).map((news, i) => (
-                <Link
-                  key={`${news.ticker}-${i}`}
-                  href={`/stock/${news.ticker}`}
-                  className="block border border-white/8 p-4 hover:bg-white/[0.03] transition-colors"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="font-[var(--font-anton)] text-[11px] tracking-[0.05em]">{news.ticker}</span>
-                    <span className={`text-[10px] font-medium ${news.dayChangePercent >= 0 ? "text-up" : "text-down"}`}>
-                      {news.dayChangePercent >= 0 ? "+" : ""}{news.dayChangePercent.toFixed(2)}%
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2 mb-1">{news.headline}</p>
-                  <p className="text-[9px] text-white/20">{formatRelativeTime(news.timestamp)}</p>
-                </Link>
-              ))}
+              {liveNews.length === 0 ? (
+                <p className="text-[11px] text-white/25 animate-pulse tracking-[0.1em] py-2">LOADING NEWS...</p>
+              ) : liveNews.slice(0, 4).map((news, i) => {
+                const ticker = news.related_tickers?.[0] ?? null;
+                return (
+                  <Link
+                    key={`${news.id}-${i}`}
+                    href={ticker ? `/stock/${ticker}` : `/news/${news.id}`}
+                    className="block border border-white/8 p-4 hover:bg-white/[0.03] transition-colors"
+                  >
+                    {ticker && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-[var(--font-anton)] text-[11px] tracking-[0.05em]">{ticker}</span>
+                        <span className={`text-[10px] font-medium ${news.sentiment >= 0 ? "text-up" : "text-down"}`}>
+                          {news.sentiment >= 0 ? "+" : ""}{(news.sentiment * 100).toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-white/40 leading-relaxed line-clamp-2 mb-1">{news.headline}</p>
+                    <p className="text-[9px] text-white/20">{formatRelativeTime(news.published_at ? new Date(news.published_at).getTime() : Date.now())}</p>
+                  </Link>
+                );
+              })}
             </div>
           </motion.div>
 

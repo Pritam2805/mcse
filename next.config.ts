@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
+  // Tell Turbopack explicitly that this directory is the workspace root,
+  // so it ignores the stray package-lock.json in C:\MCSE\.
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   async headers() {
     return [
       {
