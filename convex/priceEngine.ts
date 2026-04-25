@@ -336,20 +336,16 @@ export const openMarket = mutation({
       });
     }
 
-    // Set all stocks' openPrice to current price (start of day)
-    // Also seed a small random netSentimentFactor so prices start moving
-    // immediately (before first LLM macro-tick fires ~5 min later).
+    // Resume price activity. Do NOT reset openPrice — that would shift the
+    // ±15% circuit-breaker anchor and let prices ratchet up across multiple
+    // open/close cycles. Only seed netSentimentFactor so movement resumes.
+    //
+    // To start a fresh trading day with new openPrice, use resetPrices()
+    // explicitly. Plain Start Market just resumes from the current state.
     const stocks = await ctx.db.query("stocks").collect();
     for (const s of stocks) {
       const initialNsf = (Math.random() - 0.5) * 0.01; // ±0.005
       await ctx.db.patch(s._id, {
-        openPrice: s.currentPrice,
-        dayHigh: s.currentPrice,
-        dayLow: s.currentPrice,
-        changeDay: 0,
-        changePctDay: 0,
-        volumeDay: 0,
-        macroOpenPrice: s.currentPrice,
         netSentimentFactor: initialNsf,
       });
     }

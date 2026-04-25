@@ -251,6 +251,8 @@ export const getPortfolio = query({
           currentValue: v.number(),
           unrealisedPL: v.number(),
           unrealisedPLPct: v.number(),
+          changeDay: v.number(),
+          changePctDay: v.number(),
         }),
       ),
       totalInvested: v.number(),
@@ -297,6 +299,8 @@ export const getPortfolio = query({
           currentValue,
           unrealisedPL,
           unrealisedPLPct,
+          changeDay: stock?.changeDay ?? 0,
+          changePctDay: stock?.changePctDay ?? 0,
         };
       }),
     );

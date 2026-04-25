@@ -718,6 +718,10 @@ export interface PortfolioHolding {
   avg_price: number;
   current_price: number | null;
   pnl: number | null;
+  /** Server-computed day change in rupees (current - openPrice) × 1. */
+  change_day?: number;
+  /** Server-computed day change percent. */
+  change_pct_day?: number;
   updated_at: string;
 }
 

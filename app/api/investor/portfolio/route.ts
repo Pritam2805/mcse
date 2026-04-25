@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
       avg_price: h.avgPrice,
       current_price: h.currentPrice,
       pnl: h.unrealisedPL,
+      change_day: h.changeDay,
+      change_pct_day: h.changePctDay,
       updated_at: new Date().toISOString(),
     })),
   });

@@ -81,12 +81,14 @@ function PortfolioInner() {
     return () => { tickers.forEach(t => unsubscribe(`market:${t}`)); };
   }, [portfolio, subscribe, unsubscribe]);
 
-  // Merge portfolio with live ticks — when a ticker arrives on the WS, it overrides the polled price
+  // Merge portfolio with live ticks — when a ticker arrives on the WS, it
+  // overrides the polled price. Day change falls back to server-computed
+  // change_pct_day when no live tick (the prior "+0.00%" bug).
   const holdings = useMemo(() => portfolio.map(h => {
     const live = marketTicks[h.ticker];
     const currentPrice = live?.price ?? h.current_price ?? h.avg_price;
-    const dayChangePercent = live?.changePercent ?? 0;
-    const dayChange = live?.change ?? 0;
+    const dayChangePercent = live?.changePercent ?? h.change_pct_day ?? 0;
+    const dayChange = live?.change ?? h.change_day ?? 0;
     const currentValue = currentPrice * h.quantity;
     const investedValue = h.avg_price * h.quantity;
     const returns = currentValue - investedValue;
