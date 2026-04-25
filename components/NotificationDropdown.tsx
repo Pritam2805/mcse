@@ -55,9 +55,6 @@ function mapApiToDisplay(n: ApiNotification): DisplayNotification {
   } else if (n.kind === "MARKET_EVENT" || n.kind === "DAY_START" || n.kind === "DAY_END" || n.kind === "CIRCUIT_BREAKER") {
     type = "info";
     category = "MARKET";
-  } else if (n.kind === "IPO_ALLOTMENT" || n.kind === "IPO_REFUND") {
-    type = "order";
-    category = "ORDER";
   } else {
     type = "info";
     category = "SYSTEM";

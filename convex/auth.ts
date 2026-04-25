@@ -1,0 +1,141 @@
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+
+const STARTING_BALANCE = 200_000; // ₹2,00,000 — enough for a meaningful diversified portfolio
+const RATE_WINDOW_MS = 10 * 60 * 1000;
+const RATE_MAX_FAILURES = 5;
+
+export const rateLimitCheck = query({
+  args: { emailLower: v.string(), ip: v.string() },
+  returns: v.object({ allowed: v.boolean(), failures: v.number() }),
+  handler: async (ctx, { emailLower, ip }) => {
+    const since = Date.now() - RATE_WINDOW_MS;
+    const byEmail = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_email_at", (q) => q.eq("emailLower", emailLower).gte("at", since))
+      .collect();
+    const byIp = await ctx.db
+      .query("loginAttempts")
+      .withIndex("by_ip_at", (q) => q.eq("ip", ip).gte("at", since))
+      .collect();
+    const failures = [...byEmail, ...byIp].filter((a) => !a.succeeded).length;
+    return { allowed: failures < RATE_MAX_FAILURES, failures };
+  },
+});
+
+export const recordLoginAttempt = mutation({
+  args: { emailLower: v.string(), ip: v.string(), succeeded: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, { emailLower, ip, succeeded }) => {
+    await ctx.db.insert("loginAttempts", {
+      emailLower,
+      ip,
+      succeeded,
+      at: Date.now(),
+    });
+    return null;
+  },
+});
+
+export const provisionSession = mutation({
+  args: {
+    registrationId: v.string(),
+    email: v.string(),
+    participantName: v.string(),
+    teamName: v.optional(v.string()),
+    tokenHash: v.string(),
+    expiresAt: v.number(),
+  },
+  returns: v.object({
+    investorId: v.id("investors"),
+    sessionId: v.id("sessions"),
+    balance: v.number(),
+    name: v.string(),
+    email: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("investors")
+      .withIndex("by_registration", (q) => q.eq("registrationId", args.registrationId))
+      .unique();
+
+    let investor: Doc<"investors">;
+    if (existing) {
+      investor = existing;
+    } else {
+      const id = await ctx.db.insert("investors", {
+        registrationId: args.registrationId,
+        email: args.email,
+        name: args.participantName,
+        teamName: args.teamName,
+        balance: STARTING_BALANCE,
+        createdAt: Date.now(),
+      });
+      const fresh = await ctx.db.get(id);
+      if (!fresh) throw new Error("investor disappeared after insert");
+      investor = fresh;
+    }
+
+    const sessionId = await ctx.db.insert("sessions", {
+      tokenHash: args.tokenHash,
+      investorId: investor._id,
+      expiresAt: args.expiresAt,
+      createdAt: Date.now(),
+    });
+
+    return {
+      investorId: investor._id,
+      sessionId,
+      balance: investor.balance,
+      name: investor.name,
+      email: investor.email,
+    };
+  },
+});
+
+export const getInvestorBySession = query({
+  args: { tokenHash: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      investorId: v.id("investors"),
+      email: v.string(),
+      name: v.string(),
+      teamName: v.union(v.string(), v.null()),
+      balance: v.number(),
+    }),
+  ),
+  handler: async (ctx, { tokenHash }) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (!session) return null;
+    if (session.expiresAt < Date.now()) return null;
+    const investor = await ctx.db.get(session.investorId);
+    if (!investor) return null;
+    return {
+      investorId: investor._id,
+      email: investor.email,
+      name: investor.name,
+      teamName: investor.teamName ?? null,
+      balance: investor.balance,
+    };
+  },
+});
+
+export const revokeSession = mutation({
+  args: { tokenHash: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { tokenHash }) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_token", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (session) {
+      await ctx.db.delete(session._id);
+    }
+    return null;
+  },
+});

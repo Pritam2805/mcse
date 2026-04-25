@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, use, useCallback, useMemo, useEffect } from "react";
+import { usePoll } from "@/lib/usePoll";
 import { ArrowLeft, Star, Bookmark, X, Copy, Check, ExternalLink, Users, Calendar, Building2, User, Briefcase } from "lucide-react";
 import Portal from "@/components/Portal";
 import Link from "next/link";
@@ -9,8 +10,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { stockDirectory, parentCompanies } from "@/lib/mockData";
 import { useTrading } from "@/lib/TradingContext";
 import { usePreferences } from "@/lib/PreferencesContext";
+import { useQuery } from "convex/react";
 import { useMarketTick } from "@/lib/WebSocketContext";
-import { getShareholders, getStock, getNews, Shareholder, StockDetail, type NewsItem } from "@/lib/api";
+import { useMarketState } from "@/lib/useMarketState";
+import { api } from "@/convex/_generated/api";
+import { getShareholders, getStock, getNews, getScreener, Shareholder, StockDetail, type NewsItem } from "@/lib/api";
 import OrderConfirmModal from "@/components/OrderConfirmModal";
 import Sparkline from "@/components/Sparkline";
 
@@ -23,12 +27,65 @@ export default function StockDetailPage({
 }) {
   const { ticker } = use(params);
   const router = useRouter();
-  const stock = stockDirectory[ticker.toUpperCase()];
+  const mockStock = stockDirectory[ticker.toUpperCase()];
   const liveTick = useMarketTick(ticker.toUpperCase());
   const [apiStock, setApiStock] = useState<StockDetail | null>(null);
-  const displayPrice = liveTick?.price ?? stock?.price ?? apiStock?.price ?? 0;
-  const isLive = liveTick != null;
+  const [stockLoading, setStockLoading] = useState(true);
+  const [screenerPrice, setScreenerPrice] = useState<number | null>(null);
+  const [screenerChangePct, setScreenerChangePct] = useState<number | null>(null);
+  // Live price priority (LIVE data beats mock):
+  //   1. WebSocket liveTick  (realtime push)
+  //   2. apiStock.price      (REST — the live DB value)
+  //   3. screenerPrice       (screener REST — also live)
+  //   4. mockStock.price     (static seed — fallback only)
+  const displayPrice = liveTick?.price ?? apiStock?.price ?? screenerPrice ?? mockStock?.price ?? 0;
+  const isLive = liveTick != null || apiStock != null;
+
+  const effectiveChangePercent = useMemo(() => {
+    // Prefer live numbers; mock is last resort
+    if (screenerChangePct !== null) return screenerChangePct;
+    if (apiStock?.ohlcv && apiStock.ohlcv.open > 0) {
+      const cur = liveTick?.price ?? apiStock.price ?? 0;
+      return ((cur - apiStock.ohlcv.open) / apiStock.ohlcv.open) * 100;
+    }
+    if (mockStock) return mockStock.changePercent;
+    return 0;
+  }, [apiStock, liveTick, screenerChangePct, mockStock]);
+
+  const stock = useMemo(() => {
+    // Merge: live apiStock wins for price/ohlcv/volume, mockStock provides
+    // static metadata (about, chartData, events) as fallback.
+    if (apiStock) {
+      return {
+        ticker: apiStock.ticker,
+        name: apiStock.name,
+        price: apiStock.price ?? 0,
+        changePercent: effectiveChangePercent,
+        sparkline: [] as number[],
+        chartData: mockStock?.chartData ?? (Object.fromEntries(
+          timeRanges.map(r => [r, [] as { price: number; day: string }[]])
+        ) as Record<string, { price: number; day: string }[]>),
+        overview: {
+          open: apiStock.ohlcv?.open ?? mockStock?.overview.open ?? 0,
+          dayLow: apiStock.ohlcv?.low ?? mockStock?.overview.dayLow ?? 0,
+          dayHigh: apiStock.ohlcv?.high ?? mockStock?.overview.dayHigh ?? 0,
+        },
+        fundamentals: mockStock?.fundamentals ?? {
+          sector: apiStock.sector,
+          marketCap: "—",
+          bookValue: 0,
+          volume: apiStock.ohlcv?.volume !== undefined ? `${(apiStock.ohlcv.volume / 1_000).toFixed(1)}K` : "—",
+        },
+        about: mockStock?.about ?? null,
+        events: mockStock?.events ?? ([] as { type: string; title: string; date: string }[]),
+      };
+    }
+    if (mockStock) return mockStock;
+    return null;
+  }, [mockStock, apiStock, effectiveChangePercent]);
   const { placeOrder, getOrdersForTicker, positions, balance, isWatched: checkWatched, toggleWatchlist } = useTrading();
+  const { isOpen: marketOpen, ready: marketReady } = useMarketState();
+  const tradingDisabled = marketReady && !marketOpen;
   const [range, setRange] = useState<string>("1D");
   const [qty, setQty] = useState(1);
   const [buySellTab, setBuySellTab] = useState<"BUY" | "SELL">("BUY");
@@ -39,29 +96,48 @@ export default function StockDetailPage({
   const [mobileOrderOpen, setMobileOrderOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"ORDER" | "BOOK" | "HISTORY">("ORDER");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [sectionTab, setSectionTab] = useState<"OVERVIEW" | "NEWS" | "EVENTS" | "COMPANY" | "SHAREHOLDERS">("OVERVIEW");
-  const [shareholders, setShareholders] = useState<Shareholder[]>([]);
-  const [stockNews, setStockNews] = useState<NewsItem[]>([]);
+  const [sectionTab, setSectionTab] = useState<"OVERVIEW" | "NEWS" | "COMPANY">("OVERVIEW");
   const [tickerCopied, setTickerCopied] = useState(false);
   const [chartType, setChartType] = useState<"LINE" | "CANDLE">("LINE");
   const { confirmOrders } = usePreferences();
   // expandedNewsIndex removed — news now navigates to /news/[id] page
 
-  useEffect(() => {
-    getStock(ticker).then(res => { if (res.data) setApiStock(res.data); });
-    getNews({ ticker: ticker.toUpperCase(), limit: 10 }).then(res => {
-      if (res.data) setStockNews(res.data);
-    });
-  }, [ticker]);
-
-  // Fetch shareholders when tab is selected
-  useEffect(() => {
-    if (sectionTab === "SHAREHOLDERS" && shareholders.length === 0) {
-      getShareholders(ticker.toUpperCase()).then(res => {
-        if (res.data) setShareholders(res.data);
-      });
+  // Poll stock + screener every 5s so price stays live (legacy poll path).
+  usePoll(async () => {
+    const [sRes, scrRes] = await Promise.all([
+      getStock(ticker),
+      getScreener(),
+    ]);
+    if (sRes.data) setApiStock(sRes.data);
+    if (scrRes.data) {
+      const item = scrRes.data.find(s => s.ticker === ticker.toUpperCase());
+      if (item) {
+        if (item.price !== null) setScreenerPrice(item.price);
+        if (item.change_pct !== null) setScreenerChangePct(item.change_pct);
+      }
     }
-  }, [sectionTab, ticker, shareholders.length]);
+    setStockLoading(false);
+  }, 5000);
+
+  // Reactive news for this ticker — Convex pushes updates instantly when
+  // an admin approves a new item or the LLM news pipeline fires.
+  const tickerNewsRaw = useQuery(api.news.listNews, {
+    ticker: ticker.toUpperCase(),
+    limit: 10,
+  });
+  const stockNews: NewsItem[] = useMemo(() => {
+    if (!tickerNewsRaw) return [];
+    return tickerNewsRaw.map((n) => ({
+      id: String(n.id),
+      headline: n.headline,
+      body: n.body,
+      related_tickers: n.relatedTickers,
+      sentiment: n.sentiment,
+      source: n.source,
+      macro_tick: n.macroTick,
+      published_at: new Date(n.publishedAt).toISOString(),
+    }));
+  }, [tickerNewsRaw]);
 
   const watched = checkWatched(ticker.toUpperCase());
   const tickerOrders = getOrdersForTicker(ticker.toUpperCase());
@@ -99,9 +175,9 @@ export default function StockDetailPage({
     return candles;
   }, [stock, range]);
 
-  const executeOrder = useCallback(() => {
+  const executeOrder = useCallback(async () => {
     if (!stock) return;
-    const result = placeOrder({
+    const result = await placeOrder({
       ticker: stock.ticker,
       name: stock.name,
       type: buySellTab,
@@ -125,6 +201,13 @@ export default function StockDetailPage({
   }, [confirmOrders, executeOrder]);
 
   if (!stock) {
+    if (stockLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32 px-6">
+          <p className="text-[11px] text-white/25 animate-pulse tracking-[0.15em]">LOADING {ticker.toUpperCase()}...</p>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center py-32 px-6">
         <motion.h1
@@ -374,10 +457,9 @@ export default function StockDetailPage({
 
           {/* Section tabs — Groww style */}
           <div className="flex items-center gap-0 mb-6 md:mb-8 border-b border-white/8 -mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto scrollbar-hide">
-            {(["OVERVIEW", "NEWS", "EVENTS", "COMPANY", "SHAREHOLDERS"] as const)
+            {(["OVERVIEW", "NEWS", "COMPANY"] as const)
               .filter((tab) => {
                 if (tab === "NEWS") return stockNews.length > 0;
-                if (tab === "EVENTS") return stock.events && stock.events.length > 0;
                 return true;
               })
               .map((tab) => (
@@ -551,40 +633,7 @@ export default function StockDetailPage({
             </div>
           )}
 
-          {/* Events tab content */}
-          {sectionTab === "EVENTS" && (
-            <div className="space-y-3">
-              {stock.events && stock.events.length > 0 ? stock.events.map((event, i) => {
-                const typeColors: Record<string, string> = {
-                  RESULTS: "text-[#00D26A] border-[#00D26A]/30 bg-[#00D26A]/5",
-                  AGM: "text-blue-400 border-blue-400/30 bg-blue-400/5",
-                  DIVIDEND: "text-yellow-400 border-yellow-400/30 bg-yellow-400/5",
-                  EVENT: "text-white/50 border-white/20 bg-white/5",
-                };
-                return (
-                  <div key={i} className="border border-white/8 p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`text-[8px] tracking-[0.15em] font-semibold px-2 py-0.5 border ${typeColors[event.type] || typeColors.EVENT}`}>
-                        {event.type}
-                      </span>
-                      <p className="text-[12px] text-white/60">{event.title}</p>
-                    </div>
-                    <span className="text-[9px] tracking-[0.1em] text-white/25 whitespace-nowrap ml-3">
-                      {new Date(event.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                    </span>
-                  </div>
-                );
-              }) : (
-                <div className="py-16 text-center">
-                  <div className="w-10 h-10 mx-auto border border-white/8 flex items-center justify-center mb-3">
-                    <Calendar size={16} className="text-white/15" />
-                  </div>
-                  <p className="text-[11px] tracking-[0.1em] text-white/25">NO UPCOMING EVENTS</p>
-                  <p className="text-[9px] text-white/12 mt-1.5">Events will appear during APR 24–26</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* EVENTS tab removed — concept dropped from the platform. */}
 
           {sectionTab === "COMPANY" && (() => {
             const parent = parentCompanies.find(p => p.subsidiaries.includes(ticker.toUpperCase()));
@@ -651,93 +700,7 @@ export default function StockDetailPage({
             );
           })()}
 
-          {/* Shareholders */}
-          {sectionTab === "SHAREHOLDERS" && (
-            <div>
-              <h3 className="font-[var(--font-anton)] text-sm tracking-[0.1em] uppercase mb-4">SHAREHOLDERS</h3>
-              {shareholders.length === 0 ? (
-                <div className="border border-white/6 border-dashed p-8 text-center">
-                  <Users size={20} className="mx-auto text-white/10 mb-3" />
-                  <p className="text-[11px] tracking-[0.1em] text-white/20">Loading shareholders...</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Summary stats */}
-                  <div className="grid grid-cols-3 gap-[1px] bg-white/8 mb-4">
-                    <div className="bg-bg p-4">
-                      <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">TOTAL</p>
-                      <p className="font-[var(--font-anton)] text-lg">{shareholders.length}</p>
-                    </div>
-                    <div className="bg-bg p-4">
-                      <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">INSTITUTIONAL</p>
-                      <p className="font-[var(--font-anton)] text-lg">
-                        {shareholders.filter(s => s.archetypeKind === "INSTITUTIONAL").reduce((sum, s) => sum + s.percentage, 0).toFixed(1)}%
-                      </p>
-                    </div>
-                    <div className="bg-bg p-4">
-                      <p className="text-[9px] tracking-[0.15em] text-white/25 mb-1">RETAIL</p>
-                      <p className="font-[var(--font-anton)] text-lg">
-                        {shareholders.filter(s => s.archetypeKind === "RETAIL_AGGREGATE" || s.archetypeKind === "HUMAN").reduce((sum, s) => sum + s.percentage, 0).toFixed(1)}%
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Shareholders list */}
-                  <div className="border border-white/10">
-                    <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_80px] gap-4 px-5 py-3 border-b border-white/8">
-                      <span className="text-[9px] tracking-[0.15em] text-white/25">HOLDER</span>
-                      <span className="text-[9px] tracking-[0.15em] text-white/25">TYPE</span>
-                      <span className="text-[9px] tracking-[0.15em] text-white/25 text-right">SHARES</span>
-                      <span className="text-[9px] tracking-[0.15em] text-white/25 text-right">%</span>
-                    </div>
-                    {shareholders.map((holder, i) => {
-                      const TypeIcon = holder.archetypeKind === "INSTITUTIONAL" ? Building2 :
-                                       holder.archetypeKind === "INSIDER" ? Briefcase :
-                                       holder.archetypeKind === "HUMAN" ? User : Users;
-                      const typeLabel = holder.archetypeKind === "RETAIL_AGGREGATE" ? "RETAIL" :
-                                        holder.archetypeKind === "POOL_PROXY" ? "POOL" :
-                                        holder.archetypeKind;
-                      return (
-                        <div key={i} className={`px-5 py-3.5 ${i < shareholders.length - 1 ? "border-b border-white/6" : ""}`}>
-                          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_80px] gap-4 items-center">
-                            <div className="flex items-center gap-2.5">
-                              <TypeIcon size={14} className="text-white/30 shrink-0" />
-                              <span className="text-[11px] text-white/60">{holder.name}</span>
-                            </div>
-                            <span className={`text-[8px] tracking-[0.1em] px-1.5 py-0.5 border w-fit ${
-                              holder.archetypeKind === "INSTITUTIONAL" ? "text-blue-400 border-blue-400/20" :
-                              holder.archetypeKind === "INSIDER" ? "text-amber-400 border-amber-400/20" :
-                              "text-white/30 border-white/15"
-                            }`}>{typeLabel}</span>
-                            <span className="text-[10px] text-white/40 text-right">{holder.shareCount.toLocaleString("en-IN")}</span>
-                            <span className="text-[11px] font-[var(--font-anton)] text-right">{holder.percentage.toFixed(2)}%</span>
-                          </div>
-                          {/* Mobile view */}
-                          <div className="md:hidden flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <TypeIcon size={14} className="text-white/30" />
-                              <div>
-                                <p className="text-[10px] text-white/60">{holder.name}</p>
-                                <span className={`text-[7px] tracking-[0.1em] px-1 py-0.5 border ${
-                                  holder.archetypeKind === "INSTITUTIONAL" ? "text-blue-400 border-blue-400/20" :
-                                  holder.archetypeKind === "INSIDER" ? "text-amber-400 border-amber-400/20" :
-                                  "text-white/25 border-white/15"
-                                }`}>{typeLabel}</span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-[var(--font-anton)] text-[12px]">{holder.percentage.toFixed(2)}%</p>
-                              <p className="text-[9px] text-white/30">{holder.shareCount.toLocaleString("en-IN")}</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* SHAREHOLDERS tab removed — concept dropped from the platform. */}
 
         </div>
 
@@ -848,14 +811,19 @@ export default function StockDetailPage({
 
               <motion.button
                 onClick={handleOrder}
-                whileTap={{ scale: 0.97 }}
+                disabled={tradingDisabled}
+                whileTap={{ scale: tradingDisabled ? 1 : 0.97 }}
                 className={`w-full h-11 mt-5 text-[10px] tracking-[0.15em] font-semibold border transition-all duration-150 ${
-                  buySellTab === "BUY"
-                    ? "bg-[#00D26A] text-black border-[#00D26A] hover:bg-transparent hover:text-[#00D26A]"
-                    : "bg-[#FF5252] text-white border-[#FF5252] hover:bg-transparent hover:text-[#FF5252]"
+                  tradingDisabled
+                    ? "bg-white/[0.04] text-white/30 border-white/10 cursor-not-allowed"
+                    : buySellTab === "BUY"
+                      ? "bg-[#00D26A] text-black border-[#00D26A] hover:bg-transparent hover:text-[#00D26A]"
+                      : "bg-[#FF5252] text-white border-[#FF5252] hover:bg-transparent hover:text-[#FF5252]"
                 }`}
               >
-                {pricingType === "LIMIT" ? `${buySellTab} LIMIT` : buySellTab} {stock.ticker}
+                {tradingDisabled
+                  ? "MARKET CLOSED"
+                  : `${pricingType === "LIMIT" ? `${buySellTab} LIMIT` : buySellTab} ${stock.ticker}`}
               </motion.button>
             </div>
             </div>
@@ -922,35 +890,7 @@ export default function StockDetailPage({
             </div>
             )}
 
-            {/* Stock Events — hidden if empty */}
-            {stock.events && stock.events.length > 0 && (
-            <div>
-              <h3 className="font-[var(--font-anton)] text-sm tracking-[0.1em] uppercase mb-3">UPCOMING EVENTS</h3>
-                <div className="space-y-2">
-                  {stock.events.map((event, i) => {
-                    const typeColors: Record<string, string> = {
-                      RESULTS: "text-[#00D26A] border-[#00D26A]/30 bg-[#00D26A]/5",
-                      AGM: "text-blue-400 border-blue-400/30 bg-blue-400/5",
-                      DIVIDEND: "text-yellow-400 border-yellow-400/30 bg-yellow-400/5",
-                      EVENT: "text-white/50 border-white/20 bg-white/5",
-                    };
-                    return (
-                      <div key={i} className="border border-white/8 p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`text-[7px] tracking-[0.15em] font-semibold px-1.5 py-0.5 border ${typeColors[event.type] || typeColors.EVENT}`}>
-                            {event.type}
-                          </span>
-                          <p className="text-[11px] text-white/60">{event.title}</p>
-                        </div>
-                        <span className="text-[9px] tracking-[0.1em] text-white/25 whitespace-nowrap ml-3">
-                          {new Date(event.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-            </div>
-            )}
+            {/* Stock events block removed — concept dropped from the platform. */}
 
             {/* Order History */}
             {tickerOrders.length > 0 && (
@@ -1225,15 +1165,20 @@ export default function StockDetailPage({
               {/* Sticky confirm button — always rendered to keep panel height constant */}
               <div className={`shrink-0 px-5 py-4 border-t border-white/8 bg-bg ${mobileTab !== "ORDER" ? "invisible pointer-events-none" : ""}`}>
                   <motion.button
-                    whileTap={{ scale: 0.97 }}
+                    whileTap={{ scale: tradingDisabled ? 1 : 0.97 }}
                     onClick={handleOrder}
+                    disabled={tradingDisabled}
                     className={`w-full h-12 text-[11px] tracking-[0.15em] font-semibold border transition-all duration-150 ${
-                      buySellTab === "BUY"
-                        ? "bg-[#00D26A] text-black border-[#00D26A] hover:bg-transparent hover:text-[#00D26A]"
-                        : "bg-[#FF5252] text-white border-[#FF5252] hover:bg-transparent hover:text-[#FF5252]"
+                      tradingDisabled
+                        ? "bg-white/[0.04] text-white/30 border-white/10 cursor-not-allowed"
+                        : buySellTab === "BUY"
+                          ? "bg-[#00D26A] text-black border-[#00D26A] hover:bg-transparent hover:text-[#00D26A]"
+                          : "bg-[#FF5252] text-white border-[#FF5252] hover:bg-transparent hover:text-[#FF5252]"
                     }`}
                   >
-                    {pricingType === "LIMIT" ? `${buySellTab} LIMIT` : buySellTab} {stock.ticker}
+                    {tradingDisabled
+                      ? "MARKET CLOSED"
+                      : `${pricingType === "LIMIT" ? `${buySellTab} LIMIT` : buySellTab} ${stock.ticker}`}
                   </motion.button>
                 </div>
             </motion.div>

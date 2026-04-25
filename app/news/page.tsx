@@ -1,9 +1,22 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { getNews, type NewsItem } from "@/lib/api";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+// Shape reused by the rendering code below (previously came from api.ts).
+interface NewsItem {
+  id: string;
+  headline: string;
+  body: string;
+  related_tickers: string[];
+  sentiment: number;
+  source: string;
+  macro_tick: number;
+  published_at: string | null;
+}
 
 function formatRelativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -23,16 +36,25 @@ function sentimentLabel(s: number): string {
 }
 
 export default function NewsPage() {
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [tickerFilter, setTickerFilter] = useState("ALL");
 
-  useEffect(() => {
-    getNews({ limit: 100 }).then(res => {
-      if (res.data) setItems(res.data);
-      setLoading(false);
-    });
-  }, []);
+  // Reactive subscription: updates instantly whenever news is
+  // published/approved/deleted on the Convex backend. No polling needed.
+  const raw = useQuery(api.news.listNews, { limit: 100 });
+  const loading = raw === undefined;
+  const items: NewsItem[] = useMemo(() => {
+    if (!raw) return [];
+    return raw.map((n) => ({
+      id: String(n.id),
+      headline: n.headline,
+      body: n.body,
+      related_tickers: n.relatedTickers,
+      sentiment: n.sentiment,
+      source: n.source,
+      macro_tick: n.macroTick,
+      published_at: new Date(n.publishedAt).toISOString(),
+    }));
+  }, [raw]);
 
   const allTickers = useMemo(() => {
     const set = new Set<string>();

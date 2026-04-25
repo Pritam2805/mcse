@@ -3,6 +3,7 @@ import { Anton, Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import AppShell from "@/components/AppShell";
+import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { AuthProvider } from "@/lib/AuthContext";
 import { TradingProvider } from "@/lib/TradingContext";
 import { AdminProvider } from "@/lib/AdminContext";
@@ -51,6 +52,26 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const IS_PREVIEW = process.env.NEXT_PUBLIC_AUTH_MODE === "preview";
+
+function ProviderTree({ children }: { children: React.ReactNode }) {
+  return (
+    <ConvexClientProvider>
+      <PreferencesProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <TradingProvider>
+              <AdminProvider>
+                <AppShell>{children}</AppShell>
+              </AdminProvider>
+            </TradingProvider>
+          </WebSocketProvider>
+        </AuthProvider>
+      </PreferencesProvider>
+    </ConvexClientProvider>
+  );
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -59,25 +80,19 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${anton.variable} ${inter.variable} antialiased`} suppressHydrationWarning>
       <body className="bg-bg text-white overflow-hidden h-dvh" style={{ overflowX: 'clip' }}>
-        <ClerkProvider
-          publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-          isSatellite
-          domain={process.env.NEXT_PUBLIC_CLERK_DOMAIN}
-          signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
-          signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
-        >
-          <PreferencesProvider>
-            <AuthProvider>
-              <WebSocketProvider>
-                <TradingProvider>
-                  <AdminProvider>
-                    <AppShell>{children}</AppShell>
-                  </AdminProvider>
-                </TradingProvider>
-              </WebSocketProvider>
-            </AuthProvider>
-          </PreferencesProvider>
-        </ClerkProvider>
+        {IS_PREVIEW ? (
+          <ProviderTree>{children}</ProviderTree>
+        ) : (
+          <ClerkProvider
+            publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+            isSatellite
+            domain={process.env.NEXT_PUBLIC_CLERK_DOMAIN}
+            signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+            signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+          >
+            <ProviderTree>{children}</ProviderTree>
+          </ClerkProvider>
+        )}
       </body>
     </html>
   );

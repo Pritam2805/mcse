@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
 import LoadingScreen from "./LoadingScreen";
 import TopNav from "./TopNav";
 import TickerTape from "./TickerTape";
 import AnnouncementBanner from "./AnnouncementBanner";
+import MarketClosedBanner from "./MarketClosedBanner";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(() => {
@@ -21,6 +22,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       sessionStorage.setItem("mcse-booted", "1");
     }
   }, []);
+
+  // Safety-net: force-dismiss the loading screen after 5s no matter what,
+  // so a single broken animation / JS error on one client can't freeze boot.
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => handleDone(), 5000);
+    return () => clearTimeout(t);
+  }, [loading, handleDone]);
 
   return (
     <>
@@ -60,6 +69,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="shrink-0 z-50">
           <TopNav />
+          <MarketClosedBanner />
           <TickerTape />
           <AnnouncementBanner />
         </div>

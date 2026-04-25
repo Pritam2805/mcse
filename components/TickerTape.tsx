@@ -2,10 +2,15 @@
 
 import { useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
-import { tickerTapeItems } from "@/lib/mockData";
+import { useLiveStocks } from "@/lib/useLiveStocks";
 
 export default function TickerTape() {
-  const items = [...tickerTapeItems, ...tickerTapeItems];
+  // Pull all 57 live stocks from the API (polled every 15s).
+  const { stocks } = useLiveStocks();
+  const items = Array.from(stocks.values());
+  // Duplicate the list so the CSS scroll animation wraps seamlessly.
+  const scrollItems = [...items, ...items];
+
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const hasDragged = useRef(false);
@@ -85,10 +90,15 @@ export default function TickerTape() {
     };
   }, [onDown, onMove, onUp]);
 
+  // Empty state — tape still renders but with no scrolling content
+  if (items.length === 0) {
+    return <div className="ticker-wrap w-full h-8 bg-bg/95 backdrop-blur-md border-b border-white/8" />;
+  }
+
   return (
     <div className="ticker-wrap w-full h-8 bg-bg/95 backdrop-blur-md border-b border-white/8 overflow-hidden select-none cursor-grab active:cursor-grabbing">
       <div ref={trackRef} className="flex items-center h-full animate-ticker whitespace-nowrap">
-        {items.map((item, i) => (
+        {scrollItems.map((item, i) => (
           <Link
             key={`${item.ticker}-${i}`}
             href={`/stock/${item.ticker}`}
@@ -101,10 +111,10 @@ export default function TickerTape() {
             <span className="text-[10px] text-white/80">
               {"\u20B9"}{item.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </span>
-            <span className={`text-[10px] font-medium ${item.changePercent >= 0 ? "text-up" : "text-down"}`}>
-              {item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%
+            <span className={`text-[10px] font-medium ${item.changePct >= 0 ? "text-up" : "text-down"}`}>
+              {item.changePct >= 0 ? "+" : ""}{item.changePct.toFixed(2)}%
             </span>
-            {i < items.length - 1 && (
+            {i < scrollItems.length - 1 && (
               <span className="text-white/15 ml-2">{"\u00B7"}</span>
             )}
           </Link>

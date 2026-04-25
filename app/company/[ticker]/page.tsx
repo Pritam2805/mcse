@@ -162,7 +162,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ ticker
     const tickers = company.subsidiaries;
 
     Promise.all([
-      getCompanyGameState(),
+      getCompanyGameState(ticker.toUpperCase()),
       getCredibility(ticker.toUpperCase()),
       getNews({ limit: 10 }),
       getScreener(),

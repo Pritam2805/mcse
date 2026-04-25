@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, TrendingUp, TrendingDown, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import LoginPrompt from "@/components/LoginPrompt";
 import { useAuth } from "@/lib/AuthContext";
 import { getPortfolioAnalysis, getPortfolio, type PortfolioAnalysis, type Portfolio } from "@/lib/api";
+import { usePoll } from "@/lib/usePoll";
 import {
   ResponsiveContainer,
   PieChart,
@@ -22,17 +23,13 @@ export default function AnalysePage() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  usePoll(async () => {
     if (!isLoggedIn) { setLoading(false); return; }
-    Promise.all([
-      getPortfolioAnalysis(),
-      getPortfolio(),
-    ]).then(([aRes, pRes]) => {
-      if (aRes.data) setAnalysis(aRes.data);
-      if (pRes.data) setPortfolio(pRes.data);
-      setLoading(false);
-    });
-  }, [isLoggedIn]);
+    const [aRes, pRes] = await Promise.all([getPortfolioAnalysis(), getPortfolio()]);
+    if (aRes.data) setAnalysis(aRes.data);
+    if (pRes.data) setPortfolio(pRes.data);
+    setLoading(false);
+  }, 5000);
 
   if (!isLoggedIn) {
     return (

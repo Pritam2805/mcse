@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, use, useMemo } from "react";
+import { useState, use, useMemo, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { indexDirectory, stockDirectory, newsItems, formatRelativeTime } from "@/lib/mockData";
+import { indexDirectory, stockDirectory, formatRelativeTime } from "@/lib/mockData";
 import Sparkline from "@/components/Sparkline";
+
+interface LiveNewsItem {
+  id: string;
+  headline: string;
+  body: string;
+  related_tickers: string[];
+  sentiment: number;
+  published_at: string | null;
+  // Back-compat with mockData shape consumed lower in this file:
+  ticker: string;
+  name: string;
+  timestamp: number;
+}
 
 const timeRanges = ["1H", "3H", "1D", "3D", "ALL"] as const;
 
@@ -46,10 +59,40 @@ export default function IndexDetailPage({
     return idx.constituents.map((t) => stockDirectory[t]).filter(Boolean);
   }, [idx]);
 
+  // Fetch live news from the API and filter to this index's constituents.
+  const [liveNews, setLiveNews] = useState<LiveNewsItem[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/market/news?limit=80");
+        if (!res.ok) return;
+        const raw = (await res.json()) as Array<{
+          id: string; headline: string; body: string;
+          related_tickers: string[]; sentiment: number;
+          published_at: string | null;
+        }>;
+        if (cancelled) return;
+        setLiveNews(raw.map((n) => ({
+          ...n,
+          // Provide legacy mock-shape fields used by the existing JSX below.
+          ticker: n.related_tickers[0] ?? "",
+          name: (n.related_tickers[0] && stockDirectory[n.related_tickers[0]]?.name) ?? "",
+          timestamp: n.published_at ? new Date(n.published_at).getTime() : Date.now(),
+        })));
+      } catch { /* ignore */ }
+    }
+    load();
+    const id = setInterval(load, 20000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   const indexNews = useMemo(() => {
     if (!idx) return [];
-    return newsItems.filter((n) => idx.constituents.includes(n.ticker));
-  }, [idx]);
+    return liveNews.filter((n) =>
+      n.related_tickers.some((t) => idx.constituents.includes(t)),
+    );
+  }, [idx, liveNews]);
 
   const indexEvents = useMemo(() => {
     if (!idx) return [];
@@ -398,24 +441,21 @@ export default function IndexDetailPage({
           {/* NEWS tab */}
           {sectionTab === "NEWS" && (
             <div className="space-y-3">
-              {indexNews.map((news) => {
-                const id = newsItems.indexOf(news);
-                return (
-                  <Link key={id} href={`/news/${id}`} className="block border border-white/8 p-4 hover:bg-white/[0.02] transition-colors">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="font-[var(--font-anton)] text-[9px] tracking-[0.1em] text-white/40">{news.ticker}</span>
-                      <span className={`text-[9px] font-medium ${news.dayChangePercent >= 0 ? "text-[#00D26A]" : "text-[#FF5252]"}`}>
-                        {news.dayChangePercent >= 0 ? "+" : ""}{news.dayChangePercent.toFixed(2)}%
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-white/60 leading-relaxed mb-2">{news.headline}</p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-white/30">{news.name}</span>
-                      <span className="text-[9px] tracking-[0.1em] text-white/25">{formatRelativeTime(news.timestamp)}</span>
-                    </div>
-                  </Link>
-                );
-              })}
+              {indexNews.map((news) => (
+                <Link key={news.id} href={`/news/${news.id}`} className="block border border-white/8 p-4 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="font-[var(--font-anton)] text-[9px] tracking-[0.1em] text-white/40">{news.ticker}</span>
+                    <span className={`text-[9px] font-medium ${news.sentiment >= 0 ? "text-[#00D26A]" : "text-[#FF5252]"}`}>
+                      {news.sentiment >= 0 ? "+" : ""}{news.sentiment.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-white/60 leading-relaxed mb-2">{news.headline}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] text-white/30">{news.name}</span>
+                    <span className="text-[9px] tracking-[0.1em] text-white/25">{formatRelativeTime(news.timestamp)}</span>
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
 
@@ -536,18 +576,15 @@ export default function IndexDetailPage({
               <div>
                 <h3 className="font-[var(--font-anton)] text-sm tracking-[0.1em] uppercase mb-3">NEWS</h3>
                 <div className="space-y-2">
-                  {indexNews.slice(0, 4).map((news) => {
-                    const id = newsItems.indexOf(news);
-                    return (
-                      <Link key={id} href={`/news/${id}`} className="block border border-white/8 p-4 hover:bg-white/[0.02] transition-colors">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[8px] tracking-[0.1em] text-white/30">{news.ticker}</span>
-                        </div>
-                        <p className="text-[11px] text-white/60 leading-relaxed mb-2">{news.headline}</p>
-                        <span className="text-[9px] tracking-[0.1em] text-white/25">{formatRelativeTime(news.timestamp)}</span>
-                      </Link>
-                    );
-                  })}
+                  {indexNews.slice(0, 4).map((news) => (
+                    <Link key={news.id} href={`/news/${news.id}`} className="block border border-white/8 p-4 hover:bg-white/[0.02] transition-colors">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[8px] tracking-[0.1em] text-white/30">{news.ticker}</span>
+                      </div>
+                      <p className="text-[11px] text-white/60 leading-relaxed mb-2">{news.headline}</p>
+                      <span className="text-[9px] tracking-[0.1em] text-white/25">{formatRelativeTime(news.timestamp)}</span>
+                    </Link>
+                  ))}
                 </div>
               </div>
             )}

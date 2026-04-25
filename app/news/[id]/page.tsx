@@ -1,11 +1,24 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
-import { getNewsItem, type NewsItem } from "@/lib/api";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+
+interface NewsItem {
+  id: string;
+  headline: string;
+  body: string;
+  related_tickers: string[];
+  sentiment: number;
+  source: string;
+  macro_tick: number;
+  published_at: string | null;
+}
 
 function formatTime(iso: string | null): string {
   if (!iso) return "—";
@@ -15,13 +28,26 @@ function formatTime(iso: string | null): string {
 export default function NewsArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [news, setNews] = useState<NewsItem | null | undefined>(undefined);
 
-  useEffect(() => {
-    getNewsItem(id).then(res => {
-      setNews(res.data ?? null);
-    });
-  }, [id]);
+  // Reactive: if an admin deletes or edits this item it updates live.
+  // Convex IDs are opaque strings; the cast is safe because any arbitrary
+  // string that isn't a valid ID just resolves to null (not an error).
+  const raw = useQuery(api.news.getNewsItem, { id: id as Id<"news"> });
+  const news: NewsItem | null | undefined =
+    raw === undefined
+      ? undefined
+      : raw === null
+        ? null
+        : {
+            id: String(raw.id),
+            headline: raw.headline,
+            body: raw.body,
+            related_tickers: raw.relatedTickers,
+            sentiment: raw.sentiment,
+            source: raw.source,
+            macro_tick: raw.macroTick,
+            published_at: new Date(raw.publishedAt).toISOString(),
+          };
 
   if (news === undefined) {
     return (

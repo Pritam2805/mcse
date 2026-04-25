@@ -8,9 +8,15 @@ import {
   getAnnouncements,
   createAnnouncement,
   getMarketDay,
+  getAdminPendingNews,
+  submitCompanyNews,
+  approveAdminNews,
+  deleteAdminNews,
+  rejectAdminNews,
   type MarketStatus,
   type MarketDay,
 } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 
 interface Announcement {
   id: string;
@@ -49,9 +55,9 @@ interface AdminState {
   announcements: Announcement[];
   addAnnouncement: (title: string, content: string, priority?: "LOW" | "NORMAL" | "HIGH") => Promise<void>;
   companyNews: CompanyNews[];
-  submitNews: (title: string, content: string, company: string) => void;
-  approveNews: (id: string) => void;
-  rejectNews: (id: string) => void;
+  submitNews: (title: string, content: string, company: string) => Promise<void>;
+  approveNews: (id: string) => Promise<void>;
+  rejectNews: (id: string) => Promise<void>;
   companyEvents: CompanyEvent[];
   addEvent: (title: string, description: string, date: string, company: string) => void;
   removeEvent: (id: string) => void;
@@ -68,15 +74,16 @@ const AdminContext = createContext<AdminState>({
   announcements: [],
   addAnnouncement: async () => {},
   companyNews: [],
-  submitNews: () => {},
-  approveNews: () => {},
-  rejectNews: () => {},
+  submitNews: async () => {},
+  approveNews: async () => {},
+  rejectNews: async () => {},
   companyEvents: [],
   addEvent: () => {},
   removeEvent: () => {},
 });
 
 export function AdminProvider({ children }: { children: ReactNode }) {
+  const { role } = useAuth();
   const [marketOpen, setMarketOpen] = useState(true);
   const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
   const [marketDay, setMarketDay] = useState<MarketDay | null>(null);
@@ -127,14 +134,13 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const toggleMarket = useCallback(async () => {
     const currentPhase = marketStatus?.phase ?? "IDLE";
-    // Optimistic: flip the open indicator
+    const wasOpen = marketOpen;
     setMarketOpen((p) => !p);
 
     const res = await toggleMarketStatus(currentPhase);
     if (res.error) {
-      setMarketOpen(marketOpen); // revert
+      setMarketOpen(wasOpen);
     } else {
-      // Refresh real state from server after the lifecycle change
       await refreshMarketStatus();
     }
   }, [marketOpen, marketStatus, refreshMarketStatus]);
@@ -160,28 +166,77 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const [companyNews, setCompanyNews] = useState<CompanyNews[]>(() => [
-    { id: "NEWS-1", company: "ENIGMA", title: "Enigma Q3 results beat estimates", content: "Revenue up 23% YoY with strong club membership growth.", timestamp: Date.now() - 86400000 * 2, status: "PUBLISHED" },
-    { id: "NEWS-2", company: "ENIGMA", title: "New campus expansion planned", content: "Enigma announces expansion to three new buildings by next semester.", timestamp: Date.now() - 86400000, status: "PENDING" },
-  ]);
+  const [companyNews, setCompanyNews] = useState<CompanyNews[]>([]);
 
-  const submitNews = useCallback((title: string, content: string, company: string) => {
+  // Admin: load pending news from API
+  useEffect(() => {
+    if (role !== "admin") return;
+    getAdminPendingNews().then((res) => {
+      if (res.data) {
+        setCompanyNews(res.data.map((n) => ({
+          id: n.id,
+          company: n.source,
+          title: n.headline,
+          content: n.body,
+          timestamp: n.published_at ? new Date(n.published_at).getTime() : Date.now(),
+          status: "PENDING" as const,
+        })));
+      }
+    });
+  }, [role]);
+
+  const submitNews = useCallback(async (title: string, content: string, company: string) => {
+    const tempId = `NEWS-${Date.now()}`;
+    // Optimistic update
     setCompanyNews((prev) => [
-      { id: `NEWS-${Date.now()}`, company, title, content, timestamp: Date.now(), status: "PENDING" },
+      { id: tempId, company, title, content, timestamp: Date.now(), status: "PENDING" as const },
       ...prev,
     ]);
+
+    const res = await submitCompanyNews({
+      headline: title,
+      body: content,
+      relatedTickers: [company],
+      source: company,
+    });
+
+    if (res.data?.id && res.data.id !== tempId) {
+      // Replace temp ID with the real DB-assigned ID
+      setCompanyNews((prev) =>
+        prev.map((n) => (n.id === tempId ? { ...n, id: res.data!.id } : n))
+      );
+    } else if (res.error) {
+      // Revert on failure
+      setCompanyNews((prev) => prev.filter((n) => n.id !== tempId));
+    }
   }, []);
 
-  const approveNews = useCallback((id: string) => {
+  const approveNews = useCallback(async (id: string) => {
+    // Optimistic: mark as published
     setCompanyNews((prev) =>
       prev.map((n) => (n.id === id ? { ...n, status: "PUBLISHED" as const } : n))
     );
+    const res = await approveAdminNews(id);
+    if (res.error) {
+      // Revert
+      setCompanyNews((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, status: "PENDING" as const } : n))
+      );
+    }
   }, []);
 
-  const rejectNews = useCallback((id: string) => {
+  const rejectNews = useCallback(async (id: string) => {
+    // Flip status to REJECTED (keeps the item visible in the company's
+    // own dashboard so the submitter sees the decision).
     setCompanyNews((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, status: "REJECTED" as const } : n))
+      prev.map((n) => (n.id === id ? { ...n, status: "REJECTED" as const } : n)),
     );
+    const res = await rejectAdminNews(id);
+    if (res.error) {
+      setCompanyNews((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, status: "PENDING" as const } : n)),
+      );
+    }
   }, []);
 
   const [companyEvents, setCompanyEvents] = useState<CompanyEvent[]>(() => [

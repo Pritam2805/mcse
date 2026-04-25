@@ -4,10 +4,12 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { parentCompanies, stockDirectory } from "@/lib/mockData";
+import { parentCompanies } from "@/lib/mockData";
+import { useLiveStocks } from "@/lib/useLiveStocks";
 
 export default function CompaniesPage() {
   const router = useRouter();
+  const { stocks: liveStocks } = useLiveStocks();
 
   return (
     <div className="py-6 pb-24 md:pb-12">
@@ -32,12 +34,14 @@ export default function CompaniesPage() {
       {/* Companies list */}
       <div className="space-y-[1px] bg-white/8">
         {parentCompanies.map((pc, i) => {
-          const subs = pc.subsidiaries
-            .map((t) => stockDirectory[t])
-            .filter(Boolean);
+          // Pull LIVE changePct for each subsidiary from the /api/market/stocks
+          // polling hook; fall back to 0 if the live map hasn't loaded yet.
+          const subLiveChanges = pc.subsidiaries
+            .map((t) => liveStocks.get(t)?.changePct)
+            .filter((v): v is number => typeof v === "number");
           const avgChange =
-            subs.length > 0
-              ? subs.reduce((s, sub) => s + sub.changePercent, 0) / subs.length
+            subLiveChanges.length > 0
+              ? subLiveChanges.reduce((s, v) => s + v, 0) / subLiveChanges.length
               : 0;
 
           return (
@@ -68,7 +72,7 @@ export default function CompaniesPage() {
                     </span>
                     <span className="text-white/8">·</span>
                     <span className="text-[9px] text-white/20">
-                      {subs.length} subsidiaries
+                      {pc.subsidiaries.length} subsidiaries
                     </span>
                     <span className="text-white/8 hidden md:inline">·</span>
                     <span className="text-[9px] text-white/20 hidden md:inline">
@@ -76,12 +80,12 @@ export default function CompaniesPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1.5 md:hidden">
-                    {subs.map((sub) => (
+                    {pc.subsidiaries.map((t) => (
                       <span
-                        key={sub.ticker}
+                        key={t}
                         className="text-[8px] tracking-[0.08em] text-white/20"
                       >
-                        {sub.ticker}
+                        {t}
                       </span>
                     ))}
                   </div>
@@ -96,7 +100,7 @@ export default function CompaniesPage() {
                     {avgChange.toFixed(2)}%
                   </p>
                   <p className="text-[9px] text-white/20 mt-0.5">
-                    {subs.length} subs
+                    {pc.subsidiaries.length} subs
                   </p>
                 </div>
                 <ChevronRight

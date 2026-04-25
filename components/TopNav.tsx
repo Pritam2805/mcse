@@ -3,7 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Bell, BarChart3, Briefcase, LineChart, Eye, Newspaper, TrendingUp, LayoutDashboard, Calendar, ClipboardCheck, Users, Package } from "lucide-react";
+import { Search, Bell, BarChart3, Briefcase, Eye, Newspaper, TrendingUp, LayoutDashboard, Calendar, ClipboardCheck, Users, Package } from "lucide-react";
 import { useState, useEffect, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ProfileDropdown from "./ProfileDropdown";
@@ -15,8 +15,7 @@ import { useAuth } from "@/lib/AuthContext";
 /* Desktop tabs by role */
 const userDesktopTabs = [
   { href: "/", label: "EXPLORE", icon: BarChart3 },
-  { href: "/holdings", label: "HOLDINGS", icon: Briefcase },
-  { href: "/positions", label: "POSITIONS", icon: LineChart },
+  { href: "/portfolio", label: "PORTFOLIO", icon: Briefcase },
   { href: "/markets", label: "MARKETS", icon: TrendingUp },
   { href: "/news", label: "NEWS", icon: Newspaper },
   { href: "/watchlist", label: "WATCHLIST", icon: Eye },
@@ -25,7 +24,6 @@ const userDesktopTabs = [
 const companyAdminDesktopTabs = [
   { href: "/admin", label: "DASHBOARD", icon: LayoutDashboard },
   { href: "/admin/news", label: "NEWS", icon: Newspaper },
-  { href: "/admin/events", label: "EVENTS", icon: Calendar },
 ];
 
 const totalAdminDesktopTabs = [
@@ -38,8 +36,7 @@ const totalAdminDesktopTabs = [
 /* Mobile bottom tabs by role */
 const userMobileTabs = [
   { href: "/", label: "EXPLORE", icon: BarChart3 },
-  { href: "/holdings", label: "HOLDINGS", icon: Briefcase },
-  { href: "/positions", label: "POSITIONS", icon: LineChart },
+  { href: "/portfolio", label: "PORTFOLIO", icon: Briefcase },
   { href: "/news", label: "NEWS", icon: Newspaper },
   { href: "/watchlist", label: "WATCHLIST", icon: Eye },
 ];
@@ -47,7 +44,6 @@ const userMobileTabs = [
 const companyAdminMobileTabs = [
   { href: "/admin", label: "DASHBOARD", icon: LayoutDashboard },
   { href: "/admin/news", label: "NEWS", icon: Newspaper },
-  { href: "/admin/events", label: "EVENTS", icon: Calendar },
 ];
 
 const totalAdminMobileTabs = [
@@ -71,7 +67,7 @@ function TopNavInner() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const { isLoggedIn, userName, role } = useAuth();
+  const { isLoggedIn, authReady, userName, role } = useAuth();
 
   const initials = userName ? userName.split(" ").map(w => w[0]).join("").slice(0, 2) : "M";
 
@@ -178,7 +174,15 @@ function TopNavInner() {
             </div>
 
             <div className="relative">
-              {isLoggedIn ? (
+              {!authReady ? (
+                // Stable skeleton while auth is still resolving. Same pixel
+                // footprint as both the profile avatar and the LOG IN button
+                // so the layout doesn't jump when the real state arrives.
+                <div
+                  aria-hidden
+                  className="w-11 h-11 md:w-10 md:h-10 border border-white/10 bg-white/[0.03]"
+                />
+              ) : isLoggedIn ? (
                 <>
                   <motion.button
                     whileTap={{ scale: 0.98 }}
